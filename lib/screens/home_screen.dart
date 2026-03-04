@@ -67,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           'Wallet',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onPrimaryContainer
-                                .withValues(alpha: 0.7),
+                                .withOpacity(0.7),
                           ),
                         ),
                         Text(

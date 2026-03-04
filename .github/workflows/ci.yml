@@ -10,6 +10,8 @@ jobs:
   test:
     name: Dart Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +35,8 @@ jobs:
     name: Android Build Check
     runs-on: ubuntu-latest
     needs: test
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
