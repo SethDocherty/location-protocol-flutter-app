@@ -1,0 +1,23 @@
+name: location_protocol_flutter_app
+description: Location Protocol Signature Service demo app — implements EIP-712 signing of location attestations using the Ethereum Attestation Service schema.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  web3dart: ^2.7.3
+  flutter_secure_storage: ^9.0.0
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  test: any
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
