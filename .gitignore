@@ -7,6 +7,13 @@
 .buildlog/
 .history
 
+# For now ignore all platform builds
+android/
+ios/
+macos/
+linux/
+web/
+windows/
 
 
 # Flutter repo-specific
@@ -27,6 +34,7 @@
 /packages/flutter/coverage/
 version
 analysis_benchmark.json
+.idea
 
 # packages file containing multi-root paths
 .packages.generated
