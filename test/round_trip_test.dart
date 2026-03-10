@@ -124,6 +124,31 @@ void main() {
           isTrue);
     });
 
+    test('EAS JSON round-trip', () {
+      final unsigned = AttestationBuilder.fromCoordinates(
+        latitude: 48.8566,
+        longitude: 2.3522,
+        memo: 'EAS format test',
+        eventTimestamp: 1700000300,
+      );
+      final signed = EIP712Signer.signLocationAttestation(
+        attestation: unsigned,
+        privateKey: privateKey,
+      );
+      final easJsonString = signed.toEasOffchainJsonString();
+      final map = jsonDecode(easJsonString) as Map<String, dynamic>;
+      final deserialized = OffchainLocationAttestation.fromEasOffchainJson(map);
+      
+      expect(deserialized.uid, signed.uid);
+      expect(deserialized.signer.toLowerCase(), signed.signer.toLowerCase());
+      expect(deserialized.eventTimestamp, signed.eventTimestamp);
+      expect(deserialized.location, signed.location);
+      expect(deserialized.memo, signed.memo);
+      expect(
+          EIP712Signer.verifyLocationAttestation(attestation: deserialized),
+          isTrue);
+    });
+
     test('tampered location data fails verification', () {
       final unsigned = AttestationBuilder.fromCoordinates(
         latitude: 37.7749,

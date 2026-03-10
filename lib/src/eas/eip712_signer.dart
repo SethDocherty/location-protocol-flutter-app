@@ -173,6 +173,21 @@ class EIP712Signer {
     }
   }
 
+  static bool verifyLocationAttestation({
+    required OffchainLocationAttestation attestation,
+    int chainId = SchemaConfig.sepoliaChainId,
+    String contractAddress = SchemaConfig.sepoliaContractAddress,
+    String schemaUid = SchemaConfig.sepoliaSchemaUid,
+  }) {
+    final recovered = recoverSigner(
+      attestation: attestation,
+      chainId: chainId,
+      contractAddress: contractAddress,
+      schemaUid: schemaUid,
+    );
+    return recovered != null && recovered.toLowerCase() == attestation.signer.toLowerCase();
+  }
+
   static Uint8List _recomputeDigest({
     required OffchainLocationAttestation attestation,
     required int chainId,

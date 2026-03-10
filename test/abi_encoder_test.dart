@@ -27,14 +27,14 @@ void main() {
     });
 
     test('encodes well-known timestamp', () {
-      // 1700000000 = 0x6553_5700
+      // 1700000000 = 0x6553F100
       const ts = 1700000000;
       final result = AbiEncoder.encodeUint256(BigInt.from(ts));
       expect(result.length, 32);
       // Check big-endian byte order at end
       expect(result[28], 0x65);
       expect(result[29], 0x53);
-      expect(result[30], 0x57);
+      expect(result[30], 0xF1);
       expect(result[31], 0x00);
     });
   });
@@ -175,10 +175,10 @@ void main() {
       // Verify the first field (static uint256) is in the head
       expect(result.length, greaterThanOrEqualTo(288));
 
-      // Head word 0: eventTimestamp = 1700000000 = 0x65535700
+      // Head word 0: eventTimestamp = 1700000000 = 0x6553F100
       expect(result[28], 0x65);
       expect(result[29], 0x53);
-      expect(result[30], 0x57);
+      expect(result[30], 0xF1);
       expect(result[31], 0x00);
 
       // Head word 1: offset to srs tail = 288 exactly
