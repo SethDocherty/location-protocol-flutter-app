@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:web3dart/crypto.dart' as eth_crypto;
+import 'package:web3dart/crypto.dart';
 import 'package:web3dart/web3dart.dart';
 
 import '../models/location_attestation.dart';
@@ -10,54 +10,31 @@ import 'schema_config.dart';
 
 /// Implements EIP-712 typed structured data signing and verification for
 /// Location Protocol offchain attestations, matching the flow of the
-/// Astral SDK's `OffchainSigner.signOffchainLocationAttestation`.
-///
-/// Signing flow:
-/// 1. ABI-encode the attestation data (9 schema fields).
-/// 2. Compute the EIP-712 domain separator.
-/// 3. Compute the EAS struct hash (Attest v2 type).
-/// 4. Compute the final digest = keccak256("\x19\x01" || domainSeparator || structHash).
-/// 5. Sign the digest with secp256k1.
-///
-/// Verification reverses step 5 via `ecrecover`.
+/// EAS SDK example.
 class EIP712Signer {
-  // ---------------------------------------------------------------------------
-  // EIP-712 type hashes (computed once at startup)
-  // ---------------------------------------------------------------------------
-
-  /// keccak256 of the EIP712Domain type string.
-  static final Uint8List _domainTypeHash = eth_crypto.keccak256(
+  static final Uint8List _domainTypeHash = keccak256(
     Uint8List.fromList(utf8.encode(
       'EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)',
     )),
   );
 
-  /// keccak256 of the EAS Attest v2 type string.
-  static final Uint8List _attestTypeHash = eth_crypto.keccak256(
+  /// Standard EAS Attest type hash (8 core fields)
+  static final Uint8List _attestTypeHash = keccak256(
     Uint8List.fromList(utf8.encode(
       'Attest(uint16 version,bytes32 schema,address recipient,uint64 time,'
       'uint64 expirationTime,bool revocable,bytes32 refUID,bytes data)',
     )),
   );
 
-  // ---------------------------------------------------------------------------
-  // Domain separator
-  // ---------------------------------------------------------------------------
-
-  /// Computes the EIP-712 domain separator for the given [chainId] and
-  /// [contractAddress].
   static Uint8List computeDomainSeparator({
     required int chainId,
     required String contractAddress,
   }) {
-    final nameHash =
-        eth_crypto.keccak256(Uint8List.fromList(utf8.encode('EAS')));
-    final versionHash =
-        eth_crypto.keccak256(Uint8List.fromList(utf8.encode('1.0.0')));
-
+    final nameHash = keccak256(Uint8List.fromList(utf8.encode(SchemaConfig.domainName)));
+    final versionHash = keccak256(Uint8List.fromList(utf8.encode(SchemaConfig.domainVersion)));
     final addr = EthereumAddress.fromHex(contractAddress);
 
-    return eth_crypto.keccak256(_concat([
+    return keccak256(_concat([
       _domainTypeHash,
       nameHash,
       versionHash,
@@ -66,12 +43,6 @@ class EIP712Signer {
     ]));
   }
 
-  // ---------------------------------------------------------------------------
-  // Struct hash
-  // ---------------------------------------------------------------------------
-
-  /// Computes the EAS Attest v2 struct hash from the attestation fields and
-  /// the pre-hashed [encodedDataHash] = keccak256(ABI-encoded attestation data).
   static Uint8List computeStructHash({
     required Uint8List schemaUid,
     required String recipient,
@@ -82,42 +53,27 @@ class EIP712Signer {
   }) {
     final recipientAddr = _resolveAddress(recipient);
 
-    return eth_crypto.keccak256(_concat([
+    return keccak256(_concat([
       _attestTypeHash,
-      _encodeUint256(BigInt.from(SchemaConfig.easAttestVersion)), // uint16 as uint256
+      _encodeUint256(BigInt.from(SchemaConfig.easAttestVersion)),
       schemaUid,
-      _padLeft32(recipientAddr.addressBytes), // address → 32 bytes
-      _encodeUint256(BigInt.from(time)), // uint64 as uint256
-      _encodeUint256(BigInt.from(expirationTime)), // uint64 as uint256
+      _padLeft32(recipientAddr.addressBytes),
+      _encodeUint256(BigInt.from(time)),
+      _encodeUint256(BigInt.from(expirationTime)),
       _encodeBool(revocable),
       Uint8List(32), // refUID = bytes32(0)
-      encodedDataHash, // keccak256(data)
+      encodedDataHash,
     ]));
   }
 
-  // ---------------------------------------------------------------------------
-  // Digest
-  // ---------------------------------------------------------------------------
-
-  /// Computes the final EIP-712 digest:
-  ///   keccak256("\x19\x01" || domainSeparator || structHash)
   static Uint8List computeDigest({
     required Uint8List domainSeparator,
     required Uint8List structHash,
   }) {
     final prefix = Uint8List.fromList([0x19, 0x01]);
-    return eth_crypto.keccak256(_concat([prefix, domainSeparator, structHash]));
+    return keccak256(_concat([prefix, domainSeparator, structHash]));
   }
 
-  // ---------------------------------------------------------------------------
-  // Sign
-  // ---------------------------------------------------------------------------
-
-  /// Signs an [UnsignedLocationAttestation] and returns a completed
-  /// [OffchainLocationAttestation].
-  ///
-  /// Uses Sepolia chain/contract by default; override with [chainId] and
-  /// [contractAddress] for other networks.
   static OffchainLocationAttestation signLocationAttestation({
     required UnsignedLocationAttestation attestation,
     required EthPrivateKey privateKey,
@@ -127,7 +83,8 @@ class EIP712Signer {
   }) {
     final schemaUidBytes = _hexToBytes32(schemaUid);
     final encodedData = AbiEncoder.encodeAttestationData(attestation);
-    final encodedDataHash = eth_crypto.keccak256(encodedData);
+    final encodedDataHash = keccak256(encodedData);
+    final signerAddress = privateKey.address.hexEip55;
 
     final domainSeparator = computeDomainSeparator(
       chainId: chainId,
@@ -148,9 +105,7 @@ class EIP712Signer {
       structHash: structHash,
     );
 
-    // Sign the digest using the raw secp256k1 function (synchronous).
-    final rawSig = eth_crypto.sign(digest, privateKey.privateKey);
-    // Adjust v: the raw sign() returns recovery id 0/1; EIP-712 uses 27/28.
+    final rawSig = sign(digest, privateKey.privateKey);
     final v = rawSig.v < 27 ? rawSig.v + 27 : rawSig.v;
 
     final sigJson = jsonEncode({
@@ -159,9 +114,17 @@ class EIP712Signer {
       's': '0x${rawSig.s.toRadixString(16).padLeft(64, '0')}',
     });
 
-    // Use the digest as the attestation UID.
-    final uid =
-        '0x${digest.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+    final encodedDataHex = '0x${encodedData.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+    final uid = computeOffchainUid(
+      version: SchemaConfig.easAttestVersion,
+      schemaUid: schemaUid,
+      recipient: attestation.recipient ?? _zeroAddress,
+      time: attestation.eventTimestamp,
+      expirationTime: attestation.expirationTime ?? 0,
+      revocable: attestation.revocable,
+      refUID: '0x0000000000000000000000000000000000000000000000000000000000000000',
+      data: encodedDataHex,
+    );
 
     return OffchainLocationAttestation(
       eventTimestamp: attestation.eventTimestamp,
@@ -178,19 +141,11 @@ class EIP712Signer {
       revocable: attestation.revocable,
       uid: uid,
       signature: sigJson,
-      signer: privateKey.address.hexEip55,
+      signer: signerAddress,
       version: SchemaConfig.attestationVersion,
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Verify
-  // ---------------------------------------------------------------------------
-
-  /// Verifies the signature on [attestation] and returns the recovered signer
-  /// address.
-  ///
-  /// Returns `null` if the signature JSON is malformed or recovery fails.
   static String? recoverSigner({
     required OffchainLocationAttestation attestation,
     int chainId = SchemaConfig.sepoliaChainId,
@@ -211,43 +166,22 @@ class EIP712Signer {
         schemaUid: schemaUid,
       );
 
-      final publicKey = eth_crypto.ecRecover(digest, sig);
+      final publicKey = ecRecover(digest, sig);
       return EthereumAddress.fromPublicKey(publicKey).hexEip55;
     } catch (_) {
       return null;
     }
   }
 
-  /// Returns `true` when the recovered signer matches [attestation.signer].
-  static bool verifyLocationAttestation({
-    required OffchainLocationAttestation attestation,
-    int chainId = SchemaConfig.sepoliaChainId,
-    String contractAddress = SchemaConfig.sepoliaContractAddress,
-    String schemaUid = SchemaConfig.sepoliaSchemaUid,
-  }) {
-    final recovered = recoverSigner(
-      attestation: attestation,
-      chainId: chainId,
-      contractAddress: contractAddress,
-      schemaUid: schemaUid,
-    );
-    if (recovered == null) return false;
-    return recovered.toLowerCase() == attestation.signer.toLowerCase();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
-
   static Uint8List _recomputeDigest({
-    required UnsignedLocationAttestation attestation,
+    required OffchainLocationAttestation attestation,
     required int chainId,
     required String contractAddress,
     required String schemaUid,
   }) {
     final schemaUidBytes = _hexToBytes32(schemaUid);
     final encodedData = AbiEncoder.encodeAttestationData(attestation);
-    final encodedDataHash = eth_crypto.keccak256(encodedData);
+    final encodedDataHash = keccak256(encodedData);
 
     final domainSeparator = computeDomainSeparator(
       chainId: chainId,
@@ -267,6 +201,51 @@ class EIP712Signer {
       domainSeparator: domainSeparator,
       structHash: structHash,
     );
+  }
+
+  /// Computes the offchain UID matching the EAS SDK's
+  /// `solidityPackedKeccak256` for Version1 attestations.
+  ///
+  /// This uses Solidity's `abi.encodePacked` (tightly packed, no padding)
+  /// followed by keccak256, matching:
+  /// ```
+  /// solidityPackedKeccak256(
+  ///   ['uint16','bytes','address','address','uint64','uint64','bool','bytes32','bytes','uint32'],
+  ///   [version, hexlify(toUtf8Bytes(schema)), recipient, ZERO_ADDRESS,
+  ///    time, expirationTime, revocable, refUID, data, 0]
+  /// )
+  /// ```
+  static String computeOffchainUid({
+    required int version,
+    required String schemaUid,
+    required String recipient,
+    required int time,
+    required int expirationTime,
+    required bool revocable,
+    required String refUID,
+    required String data,
+    int nonce = 0,
+  }) {
+    final packed = _concat([
+      _packUint16(version),
+      // EAS SDK does: hexlify(toUtf8Bytes(schema))
+      // toUtf8Bytes converts the schema string to UTF-8 bytes,
+      // hexlify then makes it a hex string. But solidityPackedKeccak256
+      // with type 'bytes' takes those raw bytes from the hex string.
+      // So the net effect is: UTF-8 encode the schema string, then
+      // hexlify, then unhexlify for packing = just UTF-8 bytes of the schema.
+      Uint8List.fromList(utf8.encode(schemaUid)),
+      _packAddress(recipient),
+      _packAddress(_zeroAddress), // attester placeholder (ZERO_ADDRESS in SDK)
+      _packUint64(time),
+      _packUint64(expirationTime),
+      _packBool(revocable),
+      _hexToBytes32(refUID),
+      _hexToBytes(data),
+      _packUint32(nonce),
+    ]);
+    final hash = keccak256(packed);
+    return '0x${hash.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
   }
 
   static const String _zeroAddress = '0x0000000000000000000000000000000000000000';
@@ -311,9 +290,59 @@ class EIP712Signer {
     return bytes;
   }
 
+  /// Decodes a hex string (0x-prefixed or plain) to raw bytes.
+  static Uint8List _hexToBytes(String hex) {
+    final clean = hex.startsWith('0x') ? hex.substring(2) : hex;
+    if (clean.isEmpty) return Uint8List(0);
+    final bytes = Uint8List(clean.length ~/ 2);
+    for (int i = 0; i < bytes.length; i++) {
+      bytes[i] = int.parse(clean.substring(i * 2, i * 2 + 2), radix: 16);
+    }
+    return bytes;
+  }
+
   static BigInt _parseBigInt(String hex) {
     final clean = hex.startsWith('0x') ? hex.substring(2) : hex;
     return BigInt.parse(clean, radix: 16);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Solidity abi.encodePacked helpers (tightly packed, no 32-byte padding)
+  // ---------------------------------------------------------------------------
+
+  static Uint8List _packUint16(int value) {
+    final bytes = Uint8List(2);
+    bytes[0] = (value >> 8) & 0xFF;
+    bytes[1] = value & 0xFF;
+    return bytes;
+  }
+
+  static Uint8List _packUint32(int value) {
+    final bytes = Uint8List(4);
+    bytes[0] = (value >> 24) & 0xFF;
+    bytes[1] = (value >> 16) & 0xFF;
+    bytes[2] = (value >> 8) & 0xFF;
+    bytes[3] = value & 0xFF;
+    return bytes;
+  }
+
+  static Uint8List _packUint64(int value) {
+    final bytes = Uint8List(8);
+    var v = value;
+    for (int i = 7; i >= 0; i--) {
+      bytes[i] = v & 0xFF;
+      v = v >> 8;
+    }
+    return bytes;
+  }
+
+  static Uint8List _packAddress(String hex) {
+    final addr = EthereumAddress.fromHex(hex);
+    return addr.addressBytes; // 20 bytes
+  }
+
+  static Uint8List _packBool(bool value) {
+    return Uint8List.fromList([value ? 1 : 0]);
   }
 
   static Uint8List _concat(List<Uint8List> parts) {

@@ -165,7 +165,7 @@ class _ResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sig = attestation.parsedSignature;
-    final fullJson = attestation.toJsonString(pretty: true);
+    final fullJson = attestation.toEasOffchainJsonString(pretty: true);
 
     return Card(
       child: Padding(
@@ -198,7 +198,7 @@ class _ResultCard extends StatelessWidget {
             if (attestation.memo != null) _Field('Memo', attestation.memo!),
             const SizedBox(height: 12),
             const Divider(),
-            Text('Full JSON',
+            Text('EAS Offchain JSON',
                 style: theme.textTheme.labelMedium
                     ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -222,7 +222,7 @@ class _ResultCard extends StatelessWidget {
                 Clipboard.setData(ClipboardData(text: fullJson));
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text('Attestation JSON copied to clipboard!')),
+                      content: Text('EAS Attestation JSON copied to clipboard!')),
                 );
               },
             ),

@@ -5,7 +5,7 @@ import 'package:web3dart/crypto.dart' as eth_crypto;
 
 import '../models/location_attestation.dart';
 
-/// Implements Solidity ABI encoding for the Location Protocol EAS schema:
+/// Implements Solidity ABI encoding/decoding for the Location Protocol EAS schema:
 ///
 /// ```
 /// uint256 eventTimestamp, string srs, string locationType, string location,
@@ -70,17 +70,6 @@ class AbiEncoder {
   // ---------------------------------------------------------------------------
 
   /// Encodes a `string[]` value.
-  ///
-  /// Layout:
-  /// ```
-  /// count (32 bytes)
-  /// offset[0] (32 bytes)  <- relative to start of content area (after count)
-  /// ...
-  /// offset[n-1] (32 bytes)
-  /// tail[0] = uint256(len) ++ right_pad_32(utf8_bytes)
-  /// ...
-  /// tail[n-1]
-  /// ```
   static Uint8List encodeStringArray(List<String> arr) {
     final count = encodeUint256(BigInt.from(arr.length));
     if (arr.isEmpty) return count;
@@ -90,9 +79,6 @@ class AbiEncoder {
   }
 
   /// Encodes a `bytes[]` value.
-  ///
-  /// Each element string is treated as a hex-encoded byte sequence
-  /// (with or without leading "0x"). An empty string encodes as zero bytes.
   static Uint8List encodeBytesArray(List<String> arr) {
     final count = encodeUint256(BigInt.from(arr.length));
     if (arr.isEmpty) return count;
@@ -110,12 +96,6 @@ class AbiEncoder {
 
   /// ABI-encodes all nine fields from an [UnsignedLocationAttestation]
   /// according to the Location Protocol EAS schema.
-  ///
-  /// The 9 fields have these ABI types:
-  ///   uint256, string, string, string, string[], bytes[], string[], string[], string
-  ///
-  /// Static fields are written in-place; dynamic fields use offset pointers.
-  /// The head section is always 9 × 32 = 288 bytes.
   static Uint8List encodeAttestationData(
       UnsignedLocationAttestation attestation) {
     return encodeFields(
@@ -132,7 +112,6 @@ class AbiEncoder {
   }
 
   /// Encodes the nine schema fields given as named parameters.
-  /// Exposed separately to make unit-testing easier.
   static Uint8List encodeFields({
     required int eventTimestamp,
     required String srs,
@@ -144,31 +123,19 @@ class AbiEncoder {
     required List<String> mediaData,
     required String memo,
   }) {
-    // 9 fields — head is always 9 * 32 = 288 bytes.
     const headSize = 9 * 32;
 
-    // Encode the 8 dynamic field tails in schema order.
-    final tailSrs = encodeStringTail(srs);
-    final tailLocationType = encodeStringTail(locationType);
-    final tailLocation = encodeStringTail(location);
-    final tailRecipeType = encodeStringArray(recipeType);
-    final tailRecipePayload = encodeBytesArray(recipePayload);
-    final tailMediaType = encodeStringArray(mediaType);
-    final tailMediaData = encodeStringArray(mediaData);
-    final tailMemo = encodeStringTail(memo);
-
     final dynamicTails = [
-      tailSrs,
-      tailLocationType,
-      tailLocation,
-      tailRecipeType,
-      tailRecipePayload,
-      tailMediaType,
-      tailMediaData,
-      tailMemo,
+      encodeStringTail(srs),
+      encodeStringTail(locationType),
+      encodeStringTail(location),
+      encodeStringArray(recipeType),
+      encodeBytesArray(recipePayload),
+      encodeStringArray(mediaType),
+      encodeStringArray(mediaData),
+      encodeStringTail(memo),
     ];
 
-    // Compute offsets for each dynamic field (absolute from byte 0).
     final offsets = <int>[];
     var offset = headSize;
     for (final tail in dynamicTails) {
@@ -176,7 +143,6 @@ class AbiEncoder {
       offset += tail.length;
     }
 
-    // Build the head: static field value first, then 8 offsets.
     final head = _concat([
       encodeUint256(BigInt.from(eventTimestamp)),
       ...offsets.map((o) => encodeUint256(BigInt.from(o))),
@@ -185,18 +151,82 @@ class AbiEncoder {
     return _concat([head, ...dynamicTails]);
   }
 
-  /// Computes keccak256 of the ABI-encoded attestation data.
-  static Uint8List hashAttestationData(
-          UnsignedLocationAttestation attestation) =>
-      eth_crypto.keccak256(encodeAttestationData(attestation));
+  // ---------------------------------------------------------------------------
+  // Decoding
+  // ---------------------------------------------------------------------------
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
+  /// Decodes ABI-encoded bytes back into the nine schema fields.
+  static Map<String, dynamic> decodeAttestationData(Uint8List data) {
+    // 9 fields, each is a 32-byte word.
+    final eventTimestamp = _decodeUint256(data.sublist(0, 32)).toInt();
+
+    // The next 8 words are offsets to dynamic tails.
+    final srs = _decodeStringAt(data, _decodeUint256(data.sublist(32, 64)).toInt());
+    final locationType = _decodeStringAt(data, _decodeUint256(data.sublist(64, 96)).toInt());
+    final location = _decodeStringAt(data, _decodeUint256(data.sublist(96, 128)).toInt());
+    final recipeType = _decodeStringArrayAt(data, _decodeUint256(data.sublist(128, 160)).toInt());
+    final recipePayload = _decodeBytesArrayAt(data, _decodeUint256(data.sublist(160, 192)).toInt());
+    final mediaType = _decodeStringArrayAt(data, _decodeUint256(data.sublist(192, 224)).toInt());
+    final mediaData = _decodeStringArrayAt(data, _decodeUint256(data.sublist(224, 256)).toInt());
+    final memo = _decodeStringAt(data, _decodeUint256(data.sublist(256, 288)).toInt());
+
+    return {
+      'eventTimestamp': eventTimestamp,
+      'srs': srs,
+      'locationType': locationType,
+      'location': location,
+      'recipeType': recipeType,
+      'recipePayload': recipePayload,
+      'mediaType': mediaType,
+      'mediaData': mediaData,
+      'memo': memo.isEmpty ? null : memo,
+    };
+  }
+
+  static BigInt _decodeUint256(Uint8List word) {
+    BigInt result = BigInt.zero;
+    for (int i = 0; i < 32; i++) {
+      result = (result << 8) | BigInt.from(word[i]);
+    }
+    return result;
+  }
+
+  static String _decodeStringAt(Uint8List data, int offset) {
+    final len = _decodeUint256(data.sublist(offset, offset + 32)).toInt();
+    final strBytes = data.sublist(offset + 32, offset + 32 + len);
+    return utf8.decode(strBytes);
+  }
+
+  static List<String> _decodeStringArrayAt(Uint8List data, int offset) {
+    final count = _decodeUint256(data.sublist(offset, offset + 32)).toInt();
+    if (count == 0) return [];
+    
+    final results = <String>[];
+    for (int i = 0; i < count; i++) {
+      final itemOffset = _decodeUint256(data.sublist(offset + 32 + i * 32, offset + 64 + i * 32)).toInt();
+      // Offsets in an array are relative to the array's start word (after count).
+      results.add(_decodeStringAt(data, offset + 32 + itemOffset));
+    }
+    return results;
+  }
+
+  static List<String> _decodeBytesArrayAt(Uint8List data, int offset) {
+    final count = _decodeUint256(data.sublist(offset, offset + 32)).toInt();
+    if (count == 0) return [];
+
+    final results = <String>[];
+    for (int i = 0; i < count; i++) {
+      final itemOffset = _decodeUint256(data.sublist(offset + 32 + i * 32, offset + 64 + i * 32)).toInt();
+      final bytesOffset = offset + 32 + itemOffset;
+      final len = _decodeUint256(data.sublist(bytesOffset, bytesOffset + 32)).toInt();
+      final rawBytes = data.sublist(bytesOffset + 32, bytesOffset + 32 + len);
+      results.add('0x${rawBytes.map((b) => b.toRadixString(16).padLeft(2, "0")).join()}');
+    }
+    return results;
+  }
 
   static Uint8List _encodeArrayWithTails(
       Uint8List countWord, List<Uint8List> tails) {
-    // Offsets are relative to the start of the *content area* (word after count).
     final contentAreaOffset = tails.length * 32;
     var cur = contentAreaOffset;
     final offsets = <Uint8List>[];

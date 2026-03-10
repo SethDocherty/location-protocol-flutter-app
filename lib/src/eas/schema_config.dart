@@ -6,7 +6,7 @@ class SchemaConfig {
       'string[] recipeType,bytes[] recipePayload,string[] mediaType,'
       'string[] mediaData,string memo';
 
-  /// Schema UID on Sepolia (keccak256 of the schema string).
+  /// Schema UID on Sepolia.
   static const String sepoliaSchemaUid =
       '0xba4171c92572b1e4f241d044c32cdf083be9fd946b8766977558ca6378c824e2';
 
@@ -17,9 +17,13 @@ class SchemaConfig {
   /// Sepolia chain ID.
   static const int sepoliaChainId = 11155111;
 
-  /// EAS attestation version used for struct-hash computation.
-  static const int easAttestVersion = 2;
+  /// EAS domain name and version for standard compatibility.
+  static const String domainName = 'EAS Attestation';
+  static const String domainVersion = '0.26';
 
-  /// Version tag embedded in signed attestations.
+  /// EAS offchain attestation version (1 matches the official example).
+  static const int easAttestVersion = 1;
+
+  /// Version tag embedded in our internal models.
   static const String attestationVersion = 'astral-core-v0.1.0';
 }

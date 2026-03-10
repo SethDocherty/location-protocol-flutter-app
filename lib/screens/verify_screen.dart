@@ -34,7 +34,15 @@ class _VerifyScreenState extends State<VerifyScreen> {
     try {
       final raw = _jsonController.text.trim();
       final map = jsonDecode(raw) as Map<String, dynamic>;
-      final attestation = OffchainLocationAttestation.fromJson(map);
+      
+      final OffchainLocationAttestation attestation;
+      
+      // Detect if it's EAS format (has 'sig' field) or our internal flat format
+      if (map.containsKey('sig')) {
+        attestation = OffchainLocationAttestation.fromEasOffchainJson(map);
+      } else {
+        attestation = OffchainLocationAttestation.fromJson(map);
+      }
 
       final recovered = EIP712Signer.recoverSigner(attestation: attestation);
       final isValid = recovered != null &&
@@ -77,7 +85,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
                   labelText: 'Signed attestation JSON',
                   border: OutlineInputBorder(),
                   alignLabelWithHint: true,
-                  hintText: '{ "eventTimestamp": ..., "uid": ..., ... }',
+                  hintText: '{ "sig": { ... }, "signer": "0x..." }',
                 ),
                 maxLines: 8,
                 keyboardType: TextInputType.multiline,
@@ -96,7 +104,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
               if (_error != null) ...[
                 const SizedBox(height: 16),
                 Text(_error!,
-                    style: TextStyle(color: theme.colorScheme.error)),
+                    style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
               ],
               if (_result != null) ...[
                 const SizedBox(height: 24),
@@ -161,22 +169,22 @@ class _VerifyCard extends StatelessWidget {
               ],
             ),
             const Divider(),
-            _Label('Recovered address'),
+            const _Label('Recovered address'),
             SelectableText(result.recoveredAddress,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(fontFamily: 'monospace')),
             const SizedBox(height: 8),
-            _Label('Claimed signer'),
+            const _Label('Claimed signer'),
             SelectableText(att.signer,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(fontFamily: 'monospace')),
             const Divider(),
-            _Label('Location'),
+            const _Label('Location'),
             SelectableText(att.location,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(fontFamily: 'monospace')),
             const SizedBox(height: 4),
-            _Label('Timestamp'),
+            const _Label('Timestamp'),
             Text(
               DateTime.fromMillisecondsSinceEpoch(att.eventTimestamp * 1000)
                   .toUtc()
@@ -185,11 +193,11 @@ class _VerifyCard extends StatelessWidget {
             ),
             if (att.memo != null) ...[
               const SizedBox(height: 4),
-              _Label('Memo'),
+              const _Label('Memo'),
               Text(att.memo!, style: theme.textTheme.bodySmall),
             ],
             const SizedBox(height: 4),
-            _Label('UID'),
+            const _Label('UID'),
             SelectableText(att.uid,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(fontFamily: 'monospace')),
