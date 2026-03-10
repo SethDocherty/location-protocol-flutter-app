@@ -21,7 +21,7 @@ sequenceDiagram
     participant Signer as EIP712Signer
     participant EAS as EAS Format (Offchain)
 
-    User->>App: Submits Lat, Lng, & Memo
+    User->>App: Submits the LP Payload, the core data structure containing the location information and essential metadata
     App->>Builder: Create UnsignedLocationAttestation
     Builder-->>App: Returns Unsigned Attestation Object
 
