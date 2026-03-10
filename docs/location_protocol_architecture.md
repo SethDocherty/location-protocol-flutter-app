@@ -33,7 +33,7 @@ sequenceDiagram
 
     Signer->>Signer: Construct EIP-712 Domain Separator & Types
     Signer->>Signer: Hash message & sign with PrivateKey
-    Note User: Private Key is loaded from secure local storage
+    Note over User: Private Key is loaded from secure local storage
 
     Signer-->>App: Returns OffchainLocationAttestation (v,r,s signatures)
 
