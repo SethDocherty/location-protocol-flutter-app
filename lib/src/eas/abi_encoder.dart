@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:web3dart/crypto.dart' as eth_crypto;
 
 import '../models/location_attestation.dart';
 

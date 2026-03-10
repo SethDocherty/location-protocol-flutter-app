@@ -198,7 +198,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 '⚠️  Private keys are stored in Android Keystore-backed secure storage. '
                 'Never share your private key.',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error.withOpacity(0.8),
+                  color: theme.colorScheme.error.withValues(alpha: 0.8),
                 ),
               ),
             ],
