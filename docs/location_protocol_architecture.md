@@ -10,7 +10,7 @@ The primary goal of this application is to implement the capabilities of creatin
 
 ## Architecture and Signing Process
 
-The following sequence diagram illustrates the flow of creating an offchain location attestation within this application:
+The following sequence diagram illustrates the flow of submitting the LP Payload and creating an offchain location attestation within this application:
 
 ```mermaid
 sequenceDiagram
@@ -21,7 +21,7 @@ sequenceDiagram
     participant Signer as EIP712Signer
     participant EAS as EAS Format (Offchain)
 
-    User->>App: Submits the LP Payload, the core data structure containing the location information and essential metadata
+    User->>App: Submits the LP Payload
     App->>Builder: Create UnsignedLocationAttestation
     Builder-->>App: Returns Unsigned Attestation Object
 
@@ -41,6 +41,9 @@ sequenceDiagram
     EAS-->>App: JSON String ready for verification or sharing
     App-->>User: Displays Signed Attestation result
 ```
+
+> [!NOTE]
+> The Location Protocol (LP) Payload is the core data structure containing the location information and essential metadata. It is the input to the signing process and is used to generate the signed attestation.
 
 ## Implementation Assumptions
 
