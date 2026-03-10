@@ -55,5 +55,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
       - name: Build Android APK (debug)
         run: flutter build apk --debug
