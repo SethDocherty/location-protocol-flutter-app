@@ -8,11 +8,19 @@ import 'attestation_signer.dart';
 
 /// Signs digests using a Privy embedded Ethereum wallet.
 ///
-/// Uses `eth_signTypedData_v4` for EIP-712 typed-data signing so the wallet
-/// computes the final hash itself — matching what [EIP712Signer.recoverSigner]
-/// expects.  Using `personal_sign` with a pre-computed digest would
-/// double-wrap the message (adding the personal-sign prefix on top of the
-/// EIP-712 `\x19\x01` prefix) and always produce an unverifiable signature.
+/// @deprecated Use `PrivySignerAdapter.fromWallet` instead.
+/// `PrivySignerAdapter` offers the same functionality with an injectable
+/// `EthereumRpcCaller` that enables unit testing without the Privy SDK and
+/// clearly isolates Privy SDK types from protocol logic.
+///
+/// ```dart
+/// // Before:
+/// final signer = PrivyWalletSigner(embeddedWallet);
+///
+/// // After:
+/// final signer = PrivySignerAdapter.fromWallet(embeddedWallet);
+/// ```
+@Deprecated('Use PrivySignerAdapter.fromWallet instead.')
 class PrivyWalletSigner implements AttestationSigner {
   final EmbeddedEthereumWallet _wallet;
 

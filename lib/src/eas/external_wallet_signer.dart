@@ -1,7 +1,7 @@
 /// An [AttestationSigner] that delegates signing to an external wallet
 /// (e.g. MetaMask) via a caller-supplied callback.
 ///
-/// Unlike [PrivyWalletSigner] — which signs in-app via Privy's embedded
+/// Unlike `PrivySignerAdapter` — which signs in-app via Privy's embedded
 /// wallet RPC — this signer serializes the EIP-712 typed data to JSON,
 /// passes it to [onSignRequest], and waits for the caller to return the
 /// hex signature string.  The callback is typically implemented as a
