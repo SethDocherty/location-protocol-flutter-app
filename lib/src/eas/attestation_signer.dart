@@ -8,7 +8,9 @@ import 'package:web3dart/web3dart.dart';
 /// Decouples [EIP712Signer] from any specific wallet backend.
 /// Implementations:
 /// - [LocalKeySigner] — wraps a raw [EthPrivateKey] (tests, offline)
-/// - `PrivyWalletSigner` — signs via Privy's embedded wallet RPC
+/// - [PrivySignerAdapter] — signs via Privy's embedded wallet RPC (use
+///   [PrivySignerAdapter.fromWallet] in production or inject an
+///   [EthereumRpcCaller] in tests)
 abstract class AttestationSigner {
   /// The EIP-55 checksummed Ethereum address of this signer.
   String get address;

@@ -150,7 +150,7 @@ class EIP712Signer {
   /// Async version of [signLocationAttestation] that accepts any
   /// [AttestationSigner] implementation instead of a raw private key.
   ///
-  /// Use this with `PrivyWalletSigner` for Privy embedded wallets,
+  /// Use this with `PrivySignerAdapter` for Privy embedded wallets,
   /// or [LocalKeySigner] for raw key signing.
   ///
   /// Calls [AttestationSigner.signTypedData] so that wallet implementations

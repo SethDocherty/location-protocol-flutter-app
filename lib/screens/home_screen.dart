@@ -4,7 +4,7 @@ import '../src/eas/attestation_signer.dart';
 import '../src/eas/external_sign_dialog.dart';
 import '../src/eas/external_wallet_signer.dart';
 import '../src/eas/private_key_import_dialog.dart';
-import '../src/eas/privy_wallet_signer.dart';
+import '../src/eas/privy_signer_adapter.dart';
 import '../src/privy_auth_modal/privy_auth_modal.dart';
 import 'sign_screen.dart';
 import 'verify_screen.dart';
@@ -79,7 +79,7 @@ class HomeScreen extends StatelessWidget {
                           // Choose signer: embedded wallet (Privy RPC) or
                           // external wallet (copy/paste MetaMask console flow).
                           final AttestationSigner signer = wallet != null
-                              ? PrivyWalletSigner(wallet)
+                              ? PrivySignerAdapter.fromWallet(wallet)
                               : ExternalWalletSigner(
                                   address: walletAddress!,
                                   onSignRequest: (addr, jsonTypedData) =>
