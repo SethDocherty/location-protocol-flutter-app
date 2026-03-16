@@ -4,6 +4,7 @@ import 'package:web3dart/web3dart.dart';
 
 import 'package:location_protocol_flutter_app/src/builder/attestation_builder.dart';
 import 'package:location_protocol_flutter_app/src/eas/eip712_signer.dart';
+import 'package:location_protocol_flutter_app/src/eas/local_key_signer.dart';
 import 'package:location_protocol_flutter_app/src/eas/schema_config.dart';
 import 'package:location_protocol_flutter_app/src/models/location_attestation.dart';
 
@@ -206,6 +207,62 @@ void main() {
       );
       final recovered = EIP712Signer.recoverSigner(attestation: signed);
       expect(recovered?.toLowerCase(), _testAddress.toLowerCase());
+    });
+  });
+
+  group('EIP712Signer.signLocationAttestationWith (async)', () {
+    UnsignedLocationAttestation buildTestAttestation() {
+      return AttestationBuilder.fromCoordinates(
+        latitude: 37.7749,
+        longitude: -122.4194,
+        memo: 'Async test',
+        eventTimestamp: 1700000000,
+      );
+    }
+
+    test('produces same result as sync method', () async {
+      final att = buildTestAttestation();
+      final signer = LocalKeySigner(privateKey);
+
+      final asyncSigned = await EIP712Signer.signLocationAttestationWith(
+        attestation: att,
+        signer: signer,
+      );
+      final syncSigned = EIP712Signer.signLocationAttestation(
+        attestation: att,
+        privateKey: privateKey,
+      );
+
+      expect(asyncSigned.uid, syncSigned.uid);
+      expect(asyncSigned.signature, syncSigned.signature);
+      expect(asyncSigned.signer, syncSigned.signer);
+    });
+
+    test('produced attestation verifies correctly', () async {
+      final att = buildTestAttestation();
+      final signer = LocalKeySigner(privateKey);
+
+      final signed = await EIP712Signer.signLocationAttestationWith(
+        attestation: att,
+        signer: signer,
+      );
+
+      expect(
+        EIP712Signer.verifyLocationAttestation(attestation: signed),
+        isTrue,
+      );
+    });
+
+    test('signer address is set correctly', () async {
+      final att = buildTestAttestation();
+      final signer = LocalKeySigner(privateKey);
+
+      final signed = await EIP712Signer.signLocationAttestationWith(
+        attestation: att,
+        signer: signer,
+      );
+
+      expect(signed.signer, _testAddress);
     });
   });
 }
