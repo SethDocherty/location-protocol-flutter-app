@@ -31,12 +31,16 @@ class PrivyAuthState extends ChangeNotifier {
   bool _isAuthenticated = false;
   PrivyUser? _user;
   EmbeddedEthereumWallet? _wallet;
+  /// The connected wallet address — populated from the embedded wallet when
+  /// present, otherwise from the external wallet linked via SIWE.
+  String? _walletAddress;
   String? _error;
 
   bool get isReady => _isReady;
   bool get isAuthenticated => _isAuthenticated;
   PrivyUser? get user => _user;
   EmbeddedEthereumWallet? get wallet => _wallet;
+  String? get walletAddress => _walletAddress;
   String? get error => _error;
 
   void _update({
@@ -44,9 +48,11 @@ class PrivyAuthState extends ChangeNotifier {
     bool? isAuthenticated,
     PrivyUser? user,
     EmbeddedEthereumWallet? wallet,
+    String? walletAddress,
     String? error,
     bool clearUser = false,
     bool clearWallet = false,
+    bool clearWalletAddress = false,
     bool clearError = false,
   }) {
     bool changed = false;
@@ -75,6 +81,14 @@ class PrivyAuthState extends ChangeNotifier {
       _wallet = null;
       changed = true;
     }
+    if (walletAddress != null && walletAddress != _walletAddress) {
+      _walletAddress = walletAddress;
+      changed = true;
+    }
+    if (clearWalletAddress && _walletAddress != null) {
+      _walletAddress = null;
+      changed = true;
+    }
     if (error != null && error != _error) {
       _error = error;
       changed = true;
@@ -98,6 +112,7 @@ class PrivyAuthState extends ChangeNotifier {
       isAuthenticated: false,
       clearUser: true,
       clearWallet: true,
+      clearWalletAddress: true,
       clearError: true,
     );
   }
@@ -207,10 +222,28 @@ class _PrivyAuthProviderState extends State<PrivyAuthProvider> {
   Future<void> _handleAuthenticated(PrivyUser user) async {
     EmbeddedEthereumWallet? wallet;
 
-    if (widget.config.autoCreateWallet) {
+    // Users who logged in via SIWE already have an external wallet — don't
+    // auto-create an embedded wallet for them, even when autoCreateWallet is
+    // true (mirroring the Privy dashboard "Create embedded wallets for all
+    // users, even if they have linked external wallets" setting being off).
+    final hasExternalWallet = user.linkedAccounts.any((a) => a.type == 'wallet');
+
+    if (widget.config.autoCreateWallet && !hasExternalWallet) {
       wallet = await _ensureEmbeddedWallet(user);
     } else if (user.embeddedEthereumWallets.isNotEmpty) {
       wallet = user.embeddedEthereumWallets.first;
+    }
+
+    // Derive a display address from the embedded wallet or (for SIWE users)
+    // from the ExternalWalletAccount in linkedAccounts.
+    String? walletAddr = wallet?.address;
+    if (walletAddr == null) {
+      for (final acct in user.linkedAccounts) {
+        if (acct is ExternalWalletAccount) {
+          walletAddr = acct.address;
+          break;
+        }
+      }
     }
 
     if (!mounted) return;
@@ -221,11 +254,12 @@ class _PrivyAuthProviderState extends State<PrivyAuthProvider> {
       // Only update wallet field when we actually have one — don't clobber an
       // already-stored wallet with null when a re-entrant call returns early.
       wallet: wallet ?? _state.wallet,
+      walletAddress: walletAddr ?? _state.walletAddress,
       clearError: true,
     );
 
     final effectiveWallet = wallet ?? _state.wallet;
-    widget.config.onAuthenticated?.call(effectiveWallet?.address);
+    widget.config.onAuthenticated?.call(effectiveWallet?.address ?? walletAddr);
   }
 
   Future<EmbeddedEthereumWallet?> _ensureEmbeddedWallet(

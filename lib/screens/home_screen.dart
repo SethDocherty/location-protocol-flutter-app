@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../src/eas/attestation_signer.dart';
+import '../src/eas/external_sign_dialog.dart';
+import '../src/eas/external_wallet_signer.dart';
+import '../src/eas/private_key_import_dialog.dart';
 import '../src/eas/privy_wallet_signer.dart';
 import '../src/privy_auth_modal/privy_auth_modal.dart';
 import 'sign_screen.dart';
@@ -48,16 +52,20 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     _buildTitleCard(context, auth, theme),
                     const SizedBox(height: 32),
-                    if (!auth.isAuthenticated)
-                      _buildLoginButton(context)
-                    else ...[
+                    if (!auth.isAuthenticated) ...[
+                      _buildLoginButton(context),
+                      const SizedBox(height: 32),
+                    ],
+                    if (auth.isAuthenticated) ...[
                       _NavButton(
                         icon: Icons.edit_note,
                         label: 'Sign Attestation',
                         subtitle: 'Build and sign a location attestation',
                         onTap: () {
                           final wallet = auth.wallet;
-                          if (wallet == null) {
+                          final walletAddress = auth.walletAddress;
+
+                          if (wallet == null && walletAddress == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
@@ -67,31 +75,66 @@ class HomeScreen extends StatelessWidget {
                             );
                             return;
                           }
+
+                          // Choose signer: embedded wallet (Privy RPC) or
+                          // external wallet (copy/paste MetaMask console flow).
+                          final AttestationSigner signer = wallet != null
+                              ? PrivyWalletSigner(wallet)
+                              : ExternalWalletSigner(
+                                  address: walletAddress!,
+                                  onSignRequest: (addr, jsonTypedData) =>
+                                      showExternalSignDialog(
+                                        context,
+                                        walletAddress: addr,
+                                        jsonTypedData: jsonTypedData,
+                                      ),
+                                );
+
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => SignScreen(
-                                signer: PrivyWalletSigner(wallet),
-                              ),
+                              builder: (_) => SignScreen(signer: signer),
                             ),
                           );
                         },
                       ),
                       const SizedBox(height: 12),
-                      _NavButton(
-                        icon: Icons.verified_user,
-                        label: 'Verify Attestation',
-                        subtitle: 'Paste a signed attestation and verify it',
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const VerifyScreen(),
-                            ),
-                          );
-                        },
-                      ),
                     ],
+                    // ── Always available (no Privy auth required) ─────────────
+                    if (auth.isAuthenticated) const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Divider(),
+                    ),
+                    _NavButton(
+                      icon: Icons.verified_user_outlined,
+                      label: 'Verify Attestation',
+                      subtitle: 'Paste a signed attestation and verify it',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const VerifyScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _NavButton(
+                      icon: Icons.key,
+                      label: 'Sign with Private Key',
+                      subtitle: 'Import a key for one-time in-memory signing',
+                      onTap: () async {
+                        final signer =
+                            await showPrivateKeyImportDialog(context);
+                        if (signer == null || !context.mounted) return;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SignScreen(signer: signer),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -120,7 +163,7 @@ class HomeScreen extends StatelessWidget {
                 color: theme.colorScheme.onPrimaryContainer,
               ),
             ),
-            if (auth.isAuthenticated && auth.wallet != null) ...[
+            if (auth.isAuthenticated && auth.walletAddress != null) ...[
               const SizedBox(height: 8),
               const Divider(),
               Text(
@@ -131,7 +174,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                auth.wallet!.address,
+                auth.walletAddress!,
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontFamily: 'monospace',
                   color: theme.colorScheme.onPrimaryContainer,
