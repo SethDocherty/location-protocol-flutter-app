@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:privy_flutter/privy_flutter.dart';
-import 'package:web3dart/web3dart.dart';
 
 import 'attestation_signer.dart';
+import 'ecdsa_signature.dart';
 
 /// A function that performs a single Ethereum JSON-RPC call and returns the
 /// string result (typically a 0x-prefixed hex signature).

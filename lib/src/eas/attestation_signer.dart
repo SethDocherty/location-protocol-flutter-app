@@ -1,12 +1,12 @@
 import 'dart:typed_data';
 
-import 'package:web3dart/web3dart.dart';
+import 'ecdsa_signature.dart';
 
 /// Abstract interface for signing EIP-712 digests.
 ///
 /// Decouples [EIP712Signer] from any specific wallet backend.
 /// Implementations:
-/// - [LocalKeySigner] — wraps a raw [EthPrivateKey] (tests, offline)
+/// - [LocalKeySigner] — wraps a raw private key hex string (tests, offline)
 /// - [PrivySignerAdapter] — signs via Privy's embedded wallet RPC (use
 ///   [PrivySignerAdapter.fromWallet] in production or inject an
 ///   [EthereumRpcCaller] in tests)
@@ -18,7 +18,7 @@ abstract class AttestationSigner {
   ///
   /// Implementations may be async (e.g., Privy RPC call) or synchronous
   /// (e.g., local key). The [v] value MUST be in the [27, 28] range.
-  Future<MsgSignature> signDigest(Uint8List digest);
+  Future<EcdsaSignature> signDigest(Uint8List digest);
 
   /// Signs using the full EIP-712 typed-data structure.
   ///
@@ -32,7 +32,7 @@ abstract class AttestationSigner {
   /// hash.  Using `personal_sign` with a pre-computed digest double-wraps
   /// the message and produces a signature that cannot be verified against
   /// the plain EIP-712 digest.
-  Future<MsgSignature> signTypedData({
+  Future<EcdsaSignature> signTypedData({
     required Map<String, dynamic> domain,
     required Map<String, dynamic> types,
     required Map<String, dynamic> message,

@@ -1,27 +1,32 @@
 import 'dart:typed_data';
 
-import 'package:web3dart/web3dart.dart';
+import 'package:blockchain_utils/blockchain_utils.dart';
+import 'package:on_chain/on_chain.dart';
 
 import 'attestation_signer.dart';
+import 'ecdsa_signature.dart';
 
-/// Signs digests using a raw [EthPrivateKey] held in memory.
+/// Signs digests using a raw Ethereum private key held in memory.
 ///
 /// This is the equivalent of the previous direct `sign(digest, key)` call,
 /// wrapped behind the [AttestationSigner] interface. Used by existing tests
 /// and for offline/local signing.
 class LocalKeySigner implements AttestationSigner {
-  final EthPrivateKey _privateKey;
+  final ETHPrivateKey _privateKey;
 
-  LocalKeySigner(this._privateKey);
-
-  @override
-  String get address => _privateKey.address.eip55With0x;
+  LocalKeySigner(String privateKeyHex)
+      : _privateKey = ETHPrivateKey(privateKeyHex);
 
   @override
-  Future<MsgSignature> signDigest(Uint8List digest) async {
-    final raw = sign(digest, _privateKey.privateKey);
+  String get address => _privateKey.publicKey().toAddress().address;
+
+  @override
+  Future<EcdsaSignature> signDigest(Uint8List digest) async {
+    final raw = _privateKey.sign(digest, hashMessage: false);
+    final r = BigInt.parse(BytesUtils.toHexString(raw.rBytes), radix: 16);
+    final s = BigInt.parse(BytesUtils.toHexString(raw.sBytes), radix: 16);
     final v = raw.v < 27 ? raw.v + 27 : raw.v;
-    return MsgSignature(raw.r, raw.s, v);
+    return EcdsaSignature(r, s, v);
   }
 
   /// Delegates to [signDigest] using the pre-computed EIP-712 digest.
@@ -29,7 +34,7 @@ class LocalKeySigner implements AttestationSigner {
   /// [LocalKeySigner] calls `sign()` directly on the raw bytes with no
   /// extra prefix, so the pre-computed digest is exactly what we need.
   @override
-  Future<MsgSignature> signTypedData({
+  Future<EcdsaSignature> signTypedData({
     required Map<String, dynamic> domain,
     required Map<String, dynamic> types,
     required Map<String, dynamic> message,

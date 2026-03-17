@@ -9,7 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  web3dart: 3.0.2
+  # Ethereum primitives — shared transitive deps of location_protocol; listed
+  # here as direct deps so the app can use them without relying on implicit
+  # resolution.  Versions are pinned to the same constraints used by the library.
+  on_chain: ^8.0.0
+  blockchain_utils: ^6.0.0
   cupertino_icons: ^1.0.8
   convert: ^3.1.1
   privy_flutter: ^0.4.0
