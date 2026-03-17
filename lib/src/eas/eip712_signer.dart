@@ -6,6 +6,7 @@ import 'package:web3dart/web3dart.dart';
 
 import '../models/location_attestation.dart';
 import 'abi_encoder.dart';
+import 'attestation_signer.dart';
 import 'schema_config.dart';
 
 /// Implements EIP-712 typed structured data signing and verification for
@@ -115,6 +116,130 @@ class EIP712Signer {
     });
 
     final encodedDataHex = '0x${encodedData.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+    final uid = computeOffchainUid(
+      version: SchemaConfig.easAttestVersion,
+      schemaUid: schemaUid,
+      recipient: attestation.recipient ?? _zeroAddress,
+      time: attestation.eventTimestamp,
+      expirationTime: attestation.expirationTime ?? 0,
+      revocable: attestation.revocable,
+      refUID: '0x0000000000000000000000000000000000000000000000000000000000000000',
+      data: encodedDataHex,
+    );
+
+    return OffchainLocationAttestation(
+      eventTimestamp: attestation.eventTimestamp,
+      srs: attestation.srs,
+      locationType: attestation.locationType,
+      location: attestation.location,
+      recipeType: attestation.recipeType,
+      recipePayload: attestation.recipePayload,
+      mediaType: attestation.mediaType,
+      mediaData: attestation.mediaData,
+      memo: attestation.memo,
+      recipient: attestation.recipient,
+      expirationTime: attestation.expirationTime,
+      revocable: attestation.revocable,
+      uid: uid,
+      signature: sigJson,
+      signer: signerAddress,
+      version: SchemaConfig.attestationVersion,
+    );
+  }
+
+  /// Async version of [signLocationAttestation] that accepts any
+  /// [AttestationSigner] implementation instead of a raw private key.
+  ///
+  /// Use this with `PrivySignerAdapter` for Privy embedded wallets,
+  /// or [LocalKeySigner] for raw key signing.
+  ///
+  /// Calls [AttestationSigner.signTypedData] so that wallet implementations
+  /// (e.g. Privy) can use `eth_signTypedData_v4` directly.  [LocalKeySigner]
+  /// falls back to signing the pre-computed EIP-712 digest, which produces
+  /// an identical result.
+  static Future<OffchainLocationAttestation> signLocationAttestationWith({
+    required UnsignedLocationAttestation attestation,
+    required AttestationSigner signer,
+    int chainId = SchemaConfig.sepoliaChainId,
+    String contractAddress = SchemaConfig.sepoliaContractAddress,
+    String schemaUid = SchemaConfig.sepoliaSchemaUid,
+  }) async {
+    final schemaUidBytes = _hexToBytes32(schemaUid);
+    final encodedData = AbiEncoder.encodeAttestationData(attestation);
+    final encodedDataHash = keccak256(encodedData);
+    final signerAddress = signer.address;
+
+    final domainSeparator = computeDomainSeparator(
+      chainId: chainId,
+      contractAddress: contractAddress,
+    );
+
+    final structHash = computeStructHash(
+      schemaUid: schemaUidBytes,
+      recipient: attestation.recipient ?? _zeroAddress,
+      time: attestation.eventTimestamp,
+      expirationTime: attestation.expirationTime ?? 0,
+      revocable: attestation.revocable,
+      encodedDataHash: encodedDataHash,
+    );
+
+    final digest = computeDigest(
+      domainSeparator: domainSeparator,
+      structHash: structHash,
+    );
+
+    // Build the EIP-712 typed-data maps so wallet implementations can pass
+    // them directly to eth_signTypedData_v4.
+    final encodedDataHex =
+        '0x${encodedData.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+
+    final domain = {
+      'name': SchemaConfig.domainName,
+      'version': SchemaConfig.domainVersion,
+      'chainId': chainId,
+      'verifyingContract': contractAddress,
+    };
+
+    final types = {
+      'Attest': [
+        {'name': 'version', 'type': 'uint16'},
+        {'name': 'schema', 'type': 'bytes32'},
+        {'name': 'recipient', 'type': 'address'},
+        {'name': 'time', 'type': 'uint64'},
+        {'name': 'expirationTime', 'type': 'uint64'},
+        {'name': 'revocable', 'type': 'bool'},
+        {'name': 'refUID', 'type': 'bytes32'},
+        {'name': 'data', 'type': 'bytes'},
+      ],
+    };
+
+    final message = {
+      'version': SchemaConfig.easAttestVersion,
+      'schema': schemaUid,
+      'recipient': attestation.recipient ?? _zeroAddress,
+      'time': attestation.eventTimestamp.toString(),
+      'expirationTime': (attestation.expirationTime ?? 0).toString(),
+      'revocable': attestation.revocable,
+      'refUID':
+          '0x0000000000000000000000000000000000000000000000000000000000000000',
+      'data': encodedDataHex,
+      'nonce': '0',
+    };
+
+    final rawSig = await signer.signTypedData(
+      domain: domain,
+      types: types,
+      message: message,
+      precomputedDigest: digest,
+    );
+    final v = rawSig.v < 27 ? rawSig.v + 27 : rawSig.v;
+
+    final sigJson = jsonEncode({
+      'v': v,
+      'r': '0x${rawSig.r.toRadixString(16).padLeft(64, '0')}',
+      's': '0x${rawSig.s.toRadixString(16).padLeft(64, '0')}',
+    });
+
     final uid = computeOffchainUid(
       version: SchemaConfig.easAttestVersion,
       schemaUid: schemaUid,

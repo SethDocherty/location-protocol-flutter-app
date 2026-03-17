@@ -29,7 +29,7 @@ jobs:
         run: flutter analyze
 
       - name: Run unit tests
-        run: flutter test test/abi_encoder_test.dart test/eip712_signer_test.dart test/attestation_builder_test.dart test/round_trip_test.dart
+        run: flutter test test/abi_encoder_test.dart test/eip712_signer_test.dart test/attestation_builder_test.dart test/round_trip_test.dart test/attestation_signer_test.dart test/privy_signer_adapter_test.dart
 
   # build-android:
   #   name: Android Build Check

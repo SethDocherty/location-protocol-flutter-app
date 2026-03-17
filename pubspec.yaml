@@ -10,9 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   web3dart: ^2.7.3
-  flutter_secure_storage: ^9.0.0
   cupertino_icons: ^1.0.8
   convert: ^3.1.1
+  privy_flutter: ^0.4.0
+  flutter_dotenv: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -21,3 +22,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - .env
