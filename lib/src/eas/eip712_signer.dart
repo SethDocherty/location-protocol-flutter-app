@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:web3dart/crypto.dart';
 import 'package:web3dart/web3dart.dart';
 
 import '../models/location_attestation.dart';
@@ -33,14 +32,14 @@ class EIP712Signer {
   }) {
     final nameHash = keccak256(Uint8List.fromList(utf8.encode(SchemaConfig.domainName)));
     final versionHash = keccak256(Uint8List.fromList(utf8.encode(SchemaConfig.domainVersion)));
-    final addr = EthereumAddress.fromHex(contractAddress);
+    final addr = _hexToAddressBytes(contractAddress);
 
     return keccak256(_concat([
       _domainTypeHash,
       nameHash,
       versionHash,
       _encodeUint256(BigInt.from(chainId)),
-      _padLeft32(addr.addressBytes),
+      _padLeft32(addr),
     ]));
   }
 
@@ -52,13 +51,13 @@ class EIP712Signer {
     required bool revocable,
     required Uint8List encodedDataHash,
   }) {
-    final recipientAddr = _resolveAddress(recipient);
+    final recipientAddr = _resolveAddressBytes(recipient);
 
     return keccak256(_concat([
       _attestTypeHash,
       _encodeUint256(BigInt.from(SchemaConfig.easAttestVersion)),
       schemaUid,
-      _padLeft32(recipientAddr.addressBytes),
+      _padLeft32(recipientAddr),
       _encodeUint256(BigInt.from(time)),
       _encodeUint256(BigInt.from(expirationTime)),
       _encodeBool(revocable),
@@ -85,7 +84,7 @@ class EIP712Signer {
     final schemaUidBytes = _hexToBytes32(schemaUid);
     final encodedData = AbiEncoder.encodeAttestationData(attestation);
     final encodedDataHash = keccak256(encodedData);
-    final signerAddress = privateKey.address.hexEip55;
+    final signerAddress = privateKey.address.eip55With0x;
 
     final domainSeparator = computeDomainSeparator(
       chainId: chainId,
@@ -292,7 +291,7 @@ class EIP712Signer {
       );
 
       final publicKey = ecRecover(digest, sig);
-      return EthereumAddress.fromPublicKey(publicKey).hexEip55;
+      return bytesToHex(publicKeyToAddress(publicKey), include0x: true);
     } catch (_) {
       return null;
     }
@@ -390,12 +389,24 @@ class EIP712Signer {
 
   static const String _zeroAddress = '0x0000000000000000000000000000000000000000';
 
-  static EthereumAddress _resolveAddress(String hex) {
+  static Uint8List _resolveAddressBytes(String hex) {
     try {
-      return EthereumAddress.fromHex(hex);
+      return _hexToAddressBytes(hex);
     } catch (_) {
-      return EthereumAddress.fromHex(_zeroAddress);
+      return _hexToAddressBytes(_zeroAddress);
     }
+  }
+
+  static Uint8List _hexToAddressBytes(String hex) {
+    final clean = hex.startsWith('0x') ? hex.substring(2) : hex;
+    if (clean.length != 40) {
+      throw FormatException('Address must be 20 bytes (40 hex chars).');
+    }
+    final bytes = Uint8List(20);
+    for (int i = 0; i < 20; i++) {
+      bytes[i] = int.parse(clean.substring(i * 2, i * 2 + 2), radix: 16);
+    }
+    return bytes;
   }
 
   static Uint8List _encodeUint256(BigInt value) {
@@ -477,8 +488,7 @@ class EIP712Signer {
   }
 
   static Uint8List _packAddress(String hex) {
-    final addr = EthereumAddress.fromHex(hex);
-    return addr.addressBytes; // 20 bytes
+    return _hexToAddressBytes(hex); // 20 bytes
   }
 
   static Uint8List _packBool(bool value) {

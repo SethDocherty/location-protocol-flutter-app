@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:web3dart/crypto.dart';
 import 'package:web3dart/web3dart.dart';
 
 import 'attestation_signer.dart';
@@ -16,7 +15,7 @@ class LocalKeySigner implements AttestationSigner {
   LocalKeySigner(this._privateKey);
 
   @override
-  String get address => _privateKey.address.hexEip55;
+  String get address => _privateKey.address.eip55With0x;
 
   @override
   Future<MsgSignature> signDigest(Uint8List digest) async {

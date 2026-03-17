@@ -4,16 +4,23 @@ publish_to: none
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.11.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  web3dart: ^2.7.3
+  web3dart: 3.0.2
   cupertino_icons: ^1.0.8
   convert: ^3.1.1
   privy_flutter: ^0.4.0
   flutter_dotenv: ^5.1.0
+  # DecentralizedGeo/location-protocol-dart is a WIP Dart library implementing
+  # the Location Protocol base data model on EAS.  It is not yet published on
+  # pub.dev, so it is referenced directly from its GitHub repository.
+  location_protocol:
+    git:
+      url: https://github.com/DecentralizedGeo/location-protocol-dart.git
+      ref: 3a6d08781a18601428abaaf78d2cb7530d222896
 
 dev_dependencies:
   flutter_test:

@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:web3dart/crypto.dart';
 import 'package:web3dart/web3dart.dart';
 
 import 'package:location_protocol_flutter_app/src/eas/attestation_signer.dart';
@@ -56,8 +55,8 @@ void main() {
       final sig = await signer.signDigest(digest);
 
       final publicKey = ecRecover(digest, sig);
-      final recovered = EthereumAddress.fromPublicKey(publicKey).hexEip55;
-      expect(recovered, _testAddress);
+      final recovered = bytesToHex(publicKeyToAddress(publicKey), include0x: true);
+      expect(recovered.toLowerCase(), _testAddress.toLowerCase());
     });
   });
 }

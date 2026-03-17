@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:web3dart/crypto.dart';
 import 'package:web3dart/web3dart.dart';
 
 /// Abstract interface for signing EIP-712 digests.

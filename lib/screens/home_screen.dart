@@ -6,6 +6,7 @@ import '../src/eas/external_wallet_signer.dart';
 import '../src/eas/private_key_import_dialog.dart';
 import '../src/eas/privy_signer_adapter.dart';
 import '../src/privy_auth_modal/privy_auth_modal.dart';
+import '../src/services/location_protocol_provider.dart';
 import 'sign_screen.dart';
 import 'verify_screen.dart';
 
@@ -90,10 +91,13 @@ class HomeScreen extends StatelessWidget {
                                       ),
                                 );
 
+                          final service = LocationProtocolProvider.of(context);
+
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => SignScreen(signer: signer),
+                              builder: (_) =>
+                                  SignScreen(signer: signer, service: service),
                             ),
                           );
                         },
@@ -127,10 +131,12 @@ class HomeScreen extends StatelessWidget {
                         final signer =
                             await showPrivateKeyImportDialog(context);
                         if (signer == null || !context.mounted) return;
+                        final service = LocationProtocolProvider.of(context);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => SignScreen(signer: signer),
+                            builder: (_) =>
+                                SignScreen(signer: signer, service: service),
                           ),
                         );
                       },
