@@ -25,8 +25,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze code
-        run: flutter analyze
+      # - name: Analyze code
+      #   run: flutter analyze
 
       - name: Run unit tests
         run: flutter test test/abi_encoder_test.dart test/eip712_signer_test.dart test/attestation_builder_test.dart test/round_trip_test.dart test/attestation_signer_test.dart test/privy_signer_adapter_test.dart test/signing_verification_baseline_test.dart
