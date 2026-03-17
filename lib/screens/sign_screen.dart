@@ -3,13 +3,14 @@ import 'package:flutter/services.dart';
 
 import '../src/builder/attestation_builder.dart';
 import '../src/eas/attestation_signer.dart';
-import '../src/eas/eip712_signer.dart';
 import '../src/models/location_attestation.dart';
+import '../src/services/location_protocol_service.dart';
 
 class SignScreen extends StatefulWidget {
   final AttestationSigner signer;
+  final LocationProtocolService service;
 
-  const SignScreen({super.key, required this.signer});
+  const SignScreen({super.key, required this.signer, required this.service});
 
   @override
   State<SignScreen> createState() => _SignScreenState();
@@ -53,7 +54,7 @@ class _SignScreenState extends State<SignScreen> {
         memo: memo.isEmpty ? null : memo,
       );
 
-      final signed = await EIP712Signer.signLocationAttestationWith(
+      final signed = await widget.service.signAttestation(
         attestation: unsigned,
         signer: widget.signer,
       );

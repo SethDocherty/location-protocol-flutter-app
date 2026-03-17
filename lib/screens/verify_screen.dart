@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../src/eas/eip712_signer.dart';
 import '../src/models/location_attestation.dart';
+import '../src/services/location_protocol_provider.dart';
 
 class VerifyScreen extends StatefulWidget {
   const VerifyScreen({super.key});
@@ -44,7 +44,8 @@ class _VerifyScreenState extends State<VerifyScreen> {
         attestation = OffchainLocationAttestation.fromJson(map);
       }
 
-      final recovered = EIP712Signer.recoverSigner(attestation: attestation);
+      final service = LocationProtocolProvider.of(context);
+      final recovered = service.recoverSigner(attestation: attestation);
       final isValid = recovered != null &&
           recovered.toLowerCase() == attestation.signer.toLowerCase();
 
