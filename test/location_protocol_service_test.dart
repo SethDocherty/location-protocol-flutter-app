@@ -4,9 +4,7 @@ import 'package:web3dart/web3dart.dart';
 import 'package:location_protocol_flutter_app/src/builder/attestation_builder.dart';
 import 'package:location_protocol_flutter_app/src/eas/local_key_signer.dart';
 import 'package:location_protocol_flutter_app/src/models/location_attestation.dart';
-import 'package:location_protocol_flutter_app/src/services/legacy_location_protocol_service.dart';
 import 'package:location_protocol_flutter_app/src/services/library_location_protocol_service.dart';
-import 'package:location_protocol_flutter_app/src/services/location_protocol_config.dart';
 import 'package:location_protocol_flutter_app/src/services/location_protocol_service.dart';
 
 /// Well-known Hardhat test account #0.
@@ -24,14 +22,14 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // LegacyLocationProtocolService
+  // LibraryLocationProtocolService
   // ---------------------------------------------------------------------------
 
-  group('LegacyLocationProtocolService', () {
+  group('LibraryLocationProtocolService', () {
     late LocationProtocolService service;
 
     setUp(() {
-      service = const LegacyLocationProtocolService();
+      service = const LibraryLocationProtocolService();
     });
 
     test('implements LocationProtocolService', () {
@@ -42,7 +40,7 @@ void main() {
       final unsigned = AttestationBuilder.fromCoordinates(
         latitude: 37.7749,
         longitude: -122.4194,
-        memo: 'Legacy service test',
+        memo: 'Service test',
         eventTimestamp: 1700000000,
       );
 
@@ -122,59 +120,5 @@ void main() {
       expect(service.verifyAttestation(attestation: tampered), isFalse);
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // LibraryLocationProtocolService (delegates to legacy — no behaviour change)
-  // ---------------------------------------------------------------------------
-
-  group('LibraryLocationProtocolService', () {
-    late LocationProtocolService service;
-
-    setUp(() {
-      service = LibraryLocationProtocolService();
-    });
-
-    test('implements LocationProtocolService', () {
-      expect(service, isA<LocationProtocolService>());
-    });
-
-    test('produces the same result as the legacy service', () async {
-      final unsigned = AttestationBuilder.fromCoordinates(
-        latitude: 37.7749,
-        longitude: -122.4194,
-        memo: 'Library service parity test',
-        eventTimestamp: 1700000000,
-      );
-
-      final legacy = const LegacyLocationProtocolService();
-      final legacySigned = await legacy.signAttestation(
-        attestation: unsigned,
-        signer: signer,
-      );
-      final librarySigned = await service.signAttestation(
-        attestation: unsigned,
-        signer: signer,
-      );
-
-      // Both implementations should produce an attestation from the same signer.
-      expect(librarySigned.signer, legacySigned.signer);
-      expect(service.verifyAttestation(attestation: librarySigned), isTrue);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // LocationProtocolConfig
-  // ---------------------------------------------------------------------------
-
-  group('LocationProtocolConfig', () {
-    test('defaults to useLocationProtocolLibrary = false', () {
-      const config = LocationProtocolConfig();
-      expect(config.useLocationProtocolLibrary, isFalse);
-    });
-
-    test('can be set to true', () {
-      const config = LocationProtocolConfig(useLocationProtocolLibrary: true);
-      expect(config.useLocationProtocolLibrary, isTrue);
-    });
-  });
 }
+

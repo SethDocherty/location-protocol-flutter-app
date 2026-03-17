@@ -3,7 +3,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'screens/home_screen.dart';
 import 'src/privy_auth_modal/privy_auth_modal.dart';
-import 'src/services/location_protocol_config.dart';
 import 'src/services/location_protocol_provider.dart';
 
 Future<void> main() async {
@@ -18,7 +17,6 @@ class LocationProtocolApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LocationProtocolProvider(
-      config: const LocationProtocolConfig(),
       child: PrivyAuthProvider(
         config: PrivyAuthConfig(
           appId: dotenv.env['PRIVY_APP_ID'] ?? '',

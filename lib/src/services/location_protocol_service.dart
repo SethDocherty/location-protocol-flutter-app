@@ -4,13 +4,9 @@ import '../models/location_attestation.dart';
 /// Service interface for Location Protocol attestation operations.
 ///
 /// Decouples the UI and calling code from the underlying signing and
-/// verification implementation.  Two implementations are provided:
-///
-/// - [LegacyLocationProtocolService] — backed by the custom [EIP712Signer]
-///   utilities already in this app (existing behaviour, always safe).
-/// - [LibraryLocationProtocolService] — backed by the
-///   `DecentralizedGeo/location-protocol-dart` library; activated by setting
-///   [LocationProtocolConfig.useLocationProtocolLibrary] to `true`.
+/// verification implementation.  The sole concrete implementation is
+/// [LibraryLocationProtocolService], which is wired up automatically by
+/// [LocationProtocolProvider].
 ///
 /// Callers should obtain the active instance from [LocationProtocolProvider]:
 /// ```dart
