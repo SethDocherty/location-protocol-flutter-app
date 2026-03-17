@@ -1,27 +1,18 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:web3dart/web3dart.dart';
 
 import 'package:location_protocol_flutter_app/src/builder/attestation_builder.dart';
 import 'package:location_protocol_flutter_app/src/eas/eip712_signer.dart';
 import 'package:location_protocol_flutter_app/src/models/location_attestation.dart';
 
-/// Well-known Hardhat test account #0.
 const _testPrivateKey =
     '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const _testAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 
 void main() {
-  late EthPrivateKey privateKey;
-
-  setUp(() {
-    privateKey = EthPrivateKey.fromHex(_testPrivateKey);
-  });
-
   group('Round-trip: build → sign → serialize → deserialize → verify', () {
     test('basic round-trip with memo', () {
-      // 1. Build
       final unsigned = AttestationBuilder.fromCoordinates(
         latitude: 37.7749,
         longitude: -122.4194,
@@ -29,24 +20,21 @@ void main() {
         eventTimestamp: 1700000000,
       );
 
-      // 2. Sign
       final signed = EIP712Signer.signLocationAttestation(
         attestation: unsigned,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
 
       expect(signed.signer, _testAddress);
       expect(
           EIP712Signer.verifyLocationAttestation(attestation: signed), isTrue);
 
-      // 3. Serialize to JSON
       final json = signed.toJsonString();
       expect(json, isNotEmpty);
       expect(json.contains('"uid"'), isTrue);
       expect(json.contains('"signature"'), isTrue);
       expect(json.contains('"signer"'), isTrue);
 
-      // 4. Deserialize
       final map = jsonDecode(json) as Map<String, dynamic>;
       final deserialized = OffchainLocationAttestation.fromJson(map);
 
@@ -57,7 +45,6 @@ void main() {
       expect(deserialized.location, signed.location);
       expect(deserialized.memo, signed.memo);
 
-      // 5. Verify the deserialized attestation
       expect(
           EIP712Signer.verifyLocationAttestation(attestation: deserialized),
           isTrue);
@@ -71,7 +58,7 @@ void main() {
       );
       final signed = EIP712Signer.signLocationAttestation(
         attestation: unsigned,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       final json = signed.toJsonString();
       final deserialized =
@@ -92,7 +79,7 @@ void main() {
       );
       final signed = EIP712Signer.signLocationAttestation(
         attestation: unsigned,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       final json = signed.toJsonString();
       final deserialized =
@@ -114,7 +101,7 @@ void main() {
       );
       final signed = EIP712Signer.signLocationAttestation(
         attestation: unsigned,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       final prettyJson = signed.toJsonString(pretty: true);
       final deserialized =
@@ -133,12 +120,12 @@ void main() {
       );
       final signed = EIP712Signer.signLocationAttestation(
         attestation: unsigned,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       final easJsonString = signed.toEasOffchainJsonString();
       final map = jsonDecode(easJsonString) as Map<String, dynamic>;
       final deserialized = OffchainLocationAttestation.fromEasOffchainJson(map);
-      
+
       expect(deserialized.uid, signed.uid);
       expect(deserialized.signer.toLowerCase(), signed.signer.toLowerCase());
       expect(deserialized.eventTimestamp, signed.eventTimestamp);
@@ -158,13 +145,11 @@ void main() {
       );
       final signed = EIP712Signer.signLocationAttestation(
         attestation: unsigned,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
 
-      // Tamper with the location field after signing
       final map = jsonDecode(signed.toJsonString()) as Map<String, dynamic>;
-      map['location'] =
-          '{"type":"Point","coordinates":[0.0,0.0]}'; // different coords
+      map['location'] = '{"type":"Point","coordinates":[0.0,0.0]}';
       final tampered = OffchainLocationAttestation.fromJson(map);
 
       expect(
@@ -181,7 +166,7 @@ void main() {
       );
       final signed = EIP712Signer.signLocationAttestation(
         attestation: unsigned,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
 
       final map = jsonDecode(signed.toJsonString()) as Map<String, dynamic>;
@@ -200,7 +185,7 @@ void main() {
           longitude: -122.4194,
           eventTimestamp: 1700000000,
         ),
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       final att2 = EIP712Signer.signLocationAttestation(
         attestation: AttestationBuilder.fromCoordinates(
@@ -208,7 +193,7 @@ void main() {
           longitude: -0.1278,
           eventTimestamp: 1700000000,
         ),
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       expect(att1.uid, isNot(att2.uid));
     });

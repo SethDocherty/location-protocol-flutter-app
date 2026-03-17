@@ -30,6 +30,7 @@ class AttestationBuilder {
     });
 
     return UnsignedLocationAttestation(
+      lpVersion: '1.0.0',
       eventTimestamp: ts,
       srs: 'EPSG:4326',
       locationType: 'geojson-point',

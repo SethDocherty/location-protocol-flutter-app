@@ -1,21 +1,98 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+// ignore: depend_on_referenced_packages
+import 'package:location_protocol/location_protocol.dart'
+    show AbiEncoder as LibraryAbiEncoder, LPPayload;
 
 import '../models/location_attestation.dart';
+import 'schema_config.dart';
 
-/// Implements Solidity ABI encoding/decoding for the Location Protocol EAS schema:
+/// Solidity ABI encoder for Location Protocol EAS attestations.
 ///
-/// ```
-/// uint256 eventTimestamp, string srs, string locationType, string location,
-/// string[] recipeType, bytes[] recipePayload, string[] mediaType,
-/// string[] mediaData, string memo
-/// ```
-///
-/// Encoding follows the [Solidity ABI specification](https://docs.soliditylang.org/en/latest/abi-spec.html).
+/// [encodeAttestationData] delegates to the library's [LibraryAbiEncoder] which
+/// implements the LP-compliant schema (`lp_version, srs, location_type,
+/// location, ...user fields`).  The lower-level helpers ([encodeUint256],
+/// [padRight32], etc.) are kept for use by other parts of the codebase.
 class AbiEncoder {
   // ---------------------------------------------------------------------------
-  // Primitive encoders
+  // LP-compliant top-level encoder (delegates to library)
+  // ---------------------------------------------------------------------------
+
+  /// ABI-encodes all schema fields from [attestation] according to the
+  /// LP-compliant Location Protocol EAS schema.
+  static Uint8List encodeAttestationData(
+      UnsignedLocationAttestation attestation) {
+    final lpPayload = LPPayload(
+      lpVersion: attestation.lpVersion,
+      srs: attestation.srs,
+      locationType: attestation.locationType,
+      location: attestation.location,
+    );
+
+    final userData = <String, dynamic>{
+      'eventTimestamp': BigInt.from(attestation.eventTimestamp),
+      'recipeType': attestation.recipeType,
+      'recipePayload': attestation.recipePayload
+          .map((h) => _hexToBytes(h))
+          .toList(),
+      'mediaType': attestation.mediaType,
+      'mediaData': attestation.mediaData,
+      'memo': attestation.memo ?? '',
+    };
+
+    return LibraryAbiEncoder.encode(
+      schema: SchemaConfig.locationSchema,
+      lpPayload: lpPayload,
+      userData: userData,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // LP-compliant top-level decoder
+  // ---------------------------------------------------------------------------
+
+  /// Decodes ABI-encoded bytes back into the ten LP-compliant schema fields.
+  ///
+  /// The encoding layout (10 fields, head = 10 * 32 = 320 bytes):
+  /// - word 0: offset to lp_version (string)
+  /// - word 1: offset to srs (string)
+  /// - word 2: offset to location_type (string)
+  /// - word 3: offset to location (string)
+  /// - word 4: eventTimestamp (uint256, static)
+  /// - word 5: offset to recipeType (string[])
+  /// - word 6: offset to recipePayload (bytes[])
+  /// - word 7: offset to mediaType (string[])
+  /// - word 8: offset to mediaData (string[])
+  /// - word 9: offset to memo (string)
+  static Map<String, dynamic> decodeAttestationData(Uint8List data) {
+    final lpVersion = _decodeStringAt(data, _decodeUint256(data.sublist(0, 32)).toInt());
+    final srs = _decodeStringAt(data, _decodeUint256(data.sublist(32, 64)).toInt());
+    final locationType = _decodeStringAt(data, _decodeUint256(data.sublist(64, 96)).toInt());
+    final location = _decodeStringAt(data, _decodeUint256(data.sublist(96, 128)).toInt());
+    final eventTimestamp = _decodeUint256(data.sublist(128, 160)).toInt();
+    final recipeType = _decodeStringArrayAt(data, _decodeUint256(data.sublist(160, 192)).toInt());
+    final recipePayload = _decodeBytesArrayAt(data, _decodeUint256(data.sublist(192, 224)).toInt());
+    final mediaType = _decodeStringArrayAt(data, _decodeUint256(data.sublist(224, 256)).toInt());
+    final mediaData = _decodeStringArrayAt(data, _decodeUint256(data.sublist(256, 288)).toInt());
+    final memo = _decodeStringAt(data, _decodeUint256(data.sublist(288, 320)).toInt());
+
+    return {
+      'lpVersion': lpVersion,
+      'eventTimestamp': eventTimestamp,
+      'srs': srs,
+      'locationType': locationType,
+      'location': location,
+      'recipeType': recipeType,
+      'recipePayload': recipePayload,
+      'mediaType': mediaType,
+      'mediaData': mediaData,
+      'memo': memo.isEmpty ? null : memo,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Primitive encoders (used by EIP712Signer and tests)
   // ---------------------------------------------------------------------------
 
   /// Encodes [value] as a 32-byte big-endian unsigned integer (uint256).
@@ -40,7 +117,7 @@ class AbiEncoder {
   }
 
   // ---------------------------------------------------------------------------
-  // Dynamic type tail encoders
+  // Dynamic type tail encoders (used by encodeFields and tests)
   // ---------------------------------------------------------------------------
 
   /// Encodes one `string` value as its length-prefixed, right-padded bytes.
@@ -65,7 +142,7 @@ class AbiEncoder {
   }
 
   // ---------------------------------------------------------------------------
-  // Array encoders
+  // Array encoders (used by encodeFields and tests)
   // ---------------------------------------------------------------------------
 
   /// Encodes a `string[]` value.
@@ -90,27 +167,13 @@ class AbiEncoder {
   }
 
   // ---------------------------------------------------------------------------
-  // Top-level attestation encoder
+  // Legacy field encoder (OLD schema layout; used by unit tests only)
   // ---------------------------------------------------------------------------
 
-  /// ABI-encodes all nine fields from an [UnsignedLocationAttestation]
-  /// according to the Location Protocol EAS schema.
-  static Uint8List encodeAttestationData(
-      UnsignedLocationAttestation attestation) {
-    return encodeFields(
-      eventTimestamp: attestation.eventTimestamp,
-      srs: attestation.srs,
-      locationType: attestation.locationType,
-      location: attestation.location,
-      recipeType: attestation.recipeType,
-      recipePayload: attestation.recipePayload,
-      mediaType: attestation.mediaType,
-      mediaData: attestation.mediaData,
-      memo: attestation.memo ?? '',
-    );
-  }
-
-  /// Encodes the nine schema fields given as named parameters.
+  /// Encodes the nine OLD schema fields given as named parameters.
+  ///
+  /// Kept for backward compatibility with existing unit tests.
+  /// For LP-compliant encoding use [encodeAttestationData].
   static Uint8List encodeFields({
     required int eventTimestamp,
     required String srs,
@@ -151,35 +214,17 @@ class AbiEncoder {
   }
 
   // ---------------------------------------------------------------------------
-  // Decoding
+  // Internal helpers
   // ---------------------------------------------------------------------------
 
-  /// Decodes ABI-encoded bytes back into the nine schema fields.
-  static Map<String, dynamic> decodeAttestationData(Uint8List data) {
-    // 9 fields, each is a 32-byte word.
-    final eventTimestamp = _decodeUint256(data.sublist(0, 32)).toInt();
-
-    // The next 8 words are offsets to dynamic tails.
-    final srs = _decodeStringAt(data, _decodeUint256(data.sublist(32, 64)).toInt());
-    final locationType = _decodeStringAt(data, _decodeUint256(data.sublist(64, 96)).toInt());
-    final location = _decodeStringAt(data, _decodeUint256(data.sublist(96, 128)).toInt());
-    final recipeType = _decodeStringArrayAt(data, _decodeUint256(data.sublist(128, 160)).toInt());
-    final recipePayload = _decodeBytesArrayAt(data, _decodeUint256(data.sublist(160, 192)).toInt());
-    final mediaType = _decodeStringArrayAt(data, _decodeUint256(data.sublist(192, 224)).toInt());
-    final mediaData = _decodeStringArrayAt(data, _decodeUint256(data.sublist(224, 256)).toInt());
-    final memo = _decodeStringAt(data, _decodeUint256(data.sublist(256, 288)).toInt());
-
-    return {
-      'eventTimestamp': eventTimestamp,
-      'srs': srs,
-      'locationType': locationType,
-      'location': location,
-      'recipeType': recipeType,
-      'recipePayload': recipePayload,
-      'mediaType': mediaType,
-      'mediaData': mediaData,
-      'memo': memo.isEmpty ? null : memo,
-    };
+  static Uint8List _hexToBytes(String hex) {
+    final clean = hex.startsWith('0x') ? hex.substring(2) : hex;
+    if (clean.isEmpty) return Uint8List(0);
+    final bytes = Uint8List(clean.length ~/ 2);
+    for (int i = 0; i < bytes.length; i++) {
+      bytes[i] = int.parse(clean.substring(i * 2, i * 2 + 2), radix: 16);
+    }
+    return bytes;
   }
 
   static BigInt _decodeUint256(Uint8List word) {
@@ -199,11 +244,11 @@ class AbiEncoder {
   static List<String> _decodeStringArrayAt(Uint8List data, int offset) {
     final count = _decodeUint256(data.sublist(offset, offset + 32)).toInt();
     if (count == 0) return [];
-    
+
     final results = <String>[];
     for (int i = 0; i < count; i++) {
-      final itemOffset = _decodeUint256(data.sublist(offset + 32 + i * 32, offset + 64 + i * 32)).toInt();
-      // Offsets in an array are relative to the array's start word (after count).
+      final itemOffset = _decodeUint256(
+          data.sublist(offset + 32 + i * 32, offset + 64 + i * 32)).toInt();
       results.add(_decodeStringAt(data, offset + 32 + itemOffset));
     }
     return results;
@@ -215,11 +260,14 @@ class AbiEncoder {
 
     final results = <String>[];
     for (int i = 0; i < count; i++) {
-      final itemOffset = _decodeUint256(data.sublist(offset + 32 + i * 32, offset + 64 + i * 32)).toInt();
+      final itemOffset = _decodeUint256(
+          data.sublist(offset + 32 + i * 32, offset + 64 + i * 32)).toInt();
       final bytesOffset = offset + 32 + itemOffset;
-      final len = _decodeUint256(data.sublist(bytesOffset, bytesOffset + 32)).toInt();
+      final len = _decodeUint256(
+          data.sublist(bytesOffset, bytesOffset + 32)).toInt();
       final rawBytes = data.sublist(bytesOffset + 32, bytesOffset + 32 + len);
-      results.add('0x${rawBytes.map((b) => b.toRadixString(16).padLeft(2, "0")).join()}');
+      results.add(
+          '0x${rawBytes.map((b) => b.toRadixString(16).padLeft(2, "0")).join()}');
     }
     return results;
   }

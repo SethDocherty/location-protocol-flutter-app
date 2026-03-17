@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:web3dart/web3dart.dart';
+// ignore: depend_on_referenced_packages
+import 'package:blockchain_utils/blockchain_utils.dart';
 
 import 'package:location_protocol_flutter_app/src/builder/attestation_builder.dart';
 import 'package:location_protocol_flutter_app/src/eas/abi_encoder.dart';
@@ -13,15 +14,6 @@ import 'package:location_protocol_flutter_app/src/models/location_attestation.da
 
 import 'fixtures/signing_fixtures.dart';
 
-// ---------------------------------------------------------------------------
-// Parity helper
-// ---------------------------------------------------------------------------
-
-/// Asserts that two signed attestations are payload-equivalent: same UID,
-/// same signature, and both pass [EIP712Signer.verifyLocationAttestation].
-///
-/// Use this to compare "old" (sync private-key path) vs "new" (async
-/// AttestationSigner path) implementations side-by-side.
 void expectParity(
   OffchainLocationAttestation a,
   OffchainLocationAttestation b, {
@@ -44,12 +36,6 @@ void expectParity(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Shared fixture builder
-// ---------------------------------------------------------------------------
-
-/// Returns the deterministic unsigned attestation described by the fixture
-/// constants, matching [AttestationBuilder.fromCoordinates] output exactly.
 UnsignedLocationAttestation buildFixtureAttestation() {
   return AttestationBuilder.fromCoordinates(
     latitude: 37.7749,
@@ -60,22 +46,12 @@ UnsignedLocationAttestation buildFixtureAttestation() {
 }
 
 void main() {
-  late EthPrivateKey privateKey;
-
-  setUp(() {
-    privateKey = EthPrivateKey.fromHex(kFixturePrivateKey);
-  });
-
-  // -------------------------------------------------------------------------
-  // Golden-value snapshot assertions
-  // -------------------------------------------------------------------------
-
   group('Golden snapshots — canonical intermediate outputs', () {
     test('encoded data hash matches fixture', () {
       final attestation = buildFixtureAttestation();
       final encoded = AbiEncoder.encodeAttestationData(attestation);
       final hash =
-          '0x${keccak256(encoded).map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+          '0x${Uint8List.fromList(QuickCrypto.keccack256Hash(encoded)).map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
       expect(hash, kFixtureEncodedDataHash,
           reason: 'ABI-encoded attestation data hash must be deterministic');
     });
@@ -94,7 +70,8 @@ void main() {
     test('struct hash matches fixture', () {
       final attestation = buildFixtureAttestation();
       final encoded = AbiEncoder.encodeAttestationData(attestation);
-      final encodedDataHash = keccak256(encoded);
+      final encodedDataHash =
+          Uint8List.fromList(QuickCrypto.keccack256Hash(encoded));
       final sh = EIP712Signer.computeStructHash(
         schemaUid: _hexToBytes32(SchemaConfig.sepoliaSchemaUid),
         recipient: '0x0000000000000000000000000000000000000000',
@@ -112,7 +89,8 @@ void main() {
     test('EIP-712 digest matches fixture', () {
       final attestation = buildFixtureAttestation();
       final encoded = AbiEncoder.encodeAttestationData(attestation);
-      final encodedDataHash = keccak256(encoded);
+      final encodedDataHash =
+          Uint8List.fromList(QuickCrypto.keccack256Hash(encoded));
       final ds = EIP712Signer.computeDomainSeparator(
         chainId: SchemaConfig.sepoliaChainId,
         contractAddress: SchemaConfig.sepoliaContractAddress,
@@ -136,17 +114,13 @@ void main() {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Signed envelope shape
-  // -------------------------------------------------------------------------
-
   group('Signed envelope shape', () {
     late OffchainLocationAttestation signed;
 
     setUp(() {
       signed = EIP712Signer.signLocationAttestation(
         attestation: buildFixtureAttestation(),
-        privateKey: privateKey,
+        privateKeyHex: kFixturePrivateKey,
       );
     });
 
@@ -171,7 +145,6 @@ void main() {
     });
 
     test('signature JSON matches fixture', () {
-      // Normalise key order before comparing.
       final parsed = signed.parsedSignature;
       final canonical = jsonEncode({
         'v': parsed['v'],
@@ -186,13 +159,8 @@ void main() {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Positive verification case (1)
-  // -------------------------------------------------------------------------
-
   group('Verification — positive case', () {
     test('valid signed record verifies correctly', () {
-      // Reconstruct the signed envelope entirely from fixture constants.
       final attestation = OffchainLocationAttestation(
         eventTimestamp: kFixtureEventTimestamp,
         srs: kFixtureSrs,
@@ -224,12 +192,7 @@ void main() {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Negative verification cases (3)
-  // -------------------------------------------------------------------------
-
   group('Verification — negative cases', () {
-    /// Returns the canonical signed attestation with one field mutated.
     OffchainLocationAttestation _withOverrides({
       String? location,
       String? signer,
@@ -262,23 +225,19 @@ void main() {
       expect(
         EIP712Signer.verifyLocationAttestation(attestation: tampered),
         isFalse,
-        reason: 'Changing location must invalidate the signature',
       );
     });
 
     test('wrong signer — replaced signer address fails verification', () {
-      // Valid signature, but the claimed signer address is someone else.
       const wrongSigner = '0x0000000000000000000000000000000000000001';
       final tampered = _withOverrides(signer: wrongSigner);
       expect(
         EIP712Signer.verifyLocationAttestation(attestation: tampered),
         isFalse,
-        reason: 'A mismatched signer address must fail verification',
       );
     });
 
     test('malformed signature — corrupted bytes fail verification', () {
-      // Replace r with all-zero bytes — not a valid signature for this digest.
       final badSig = jsonEncode({
         'v': kFixtureSigV,
         'r': '0x${'00' * 32}',
@@ -288,27 +247,20 @@ void main() {
       expect(
         EIP712Signer.verifyLocationAttestation(attestation: tampered),
         isFalse,
-        reason: 'A corrupted signature must fail verification',
       );
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Parity helpers — sync vs async implementation
-  // -------------------------------------------------------------------------
-
-  group('Parity — sync (signLocationAttestation) vs async (signLocationAttestationWith)', () {
+  group('Parity — sync vs async implementation', () {
     test('both implementations produce identical UID and signature', () async {
       final attestation = buildFixtureAttestation();
-      final signer = LocalKeySigner(privateKey);
+      final signer = LocalKeySigner(kFixturePrivateKey);
 
-      // "Old" sync path
       final syncSigned = EIP712Signer.signLocationAttestation(
         attestation: attestation,
-        privateKey: privateKey,
+        privateKeyHex: kFixturePrivateKey,
       );
 
-      // "New" async path
       final asyncSigned = await EIP712Signer.signLocationAttestationWith(
         attestation: attestation,
         signer: signer,
@@ -321,7 +273,7 @@ void main() {
     test('sync output matches fixture golden values', () {
       final signed = EIP712Signer.signLocationAttestation(
         attestation: buildFixtureAttestation(),
-        privateKey: privateKey,
+        privateKeyHex: kFixturePrivateKey,
       );
       expect(signed.uid, kFixtureUid,
           reason: 'Sync path UID must match golden fixture');
@@ -330,7 +282,7 @@ void main() {
     });
 
     test('async output matches fixture golden values', () async {
-      final signer = LocalKeySigner(privateKey);
+      final signer = LocalKeySigner(kFixturePrivateKey);
       final signed = await EIP712Signer.signLocationAttestationWith(
         attestation: buildFixtureAttestation(),
         signer: signer,
@@ -342,10 +294,6 @@ void main() {
     });
   });
 }
-
-// ---------------------------------------------------------------------------
-// Local helpers
-// ---------------------------------------------------------------------------
 
 Uint8List _hexToBytes32(String hex) {
   final clean = hex.startsWith('0x') ? hex.substring(2) : hex;

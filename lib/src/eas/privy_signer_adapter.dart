@@ -140,7 +140,7 @@ class PrivySignerAdapter implements AttestationSigner {
   /// attestations; reserve this method for cases that explicitly require
   /// personal-sign semantics.
   @override
-  Future<MsgSignature> signDigest(Uint8List digest) async {
+  Future<EcdsaSignature> signDigest(Uint8List digest) async {
     final digestHex =
         '0x${digest.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
 
@@ -156,10 +156,10 @@ class PrivySignerAdapter implements AttestationSigner {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
-  /// Parses a 0x-prefixed 65-byte hex signature into a [MsgSignature].
+  /// Parses a 0x-prefixed 65-byte hex signature into a [EcdsaSignature].
   ///
   /// Normalises `v` from Ethereum-compact (0 or 1) to EIP-155 (27 or 28).
-  static MsgSignature _parseSignature(String sigHex) {
+  static EcdsaSignature _parseSignature(String sigHex) {
     final clean = sigHex.startsWith('0x') ? sigHex.substring(2) : sigHex;
     if (clean.length != 130) {
       throw FormatException(
@@ -173,6 +173,6 @@ class PrivySignerAdapter implements AttestationSigner {
     var v = int.parse(clean.substring(128, 130), radix: 16);
     if (v < 27) v += 27; // compact 0/1 → EIP-155 27/28
 
-    return MsgSignature(r, s, v);
+    return EcdsaSignature(r, s, v);
   }
 }

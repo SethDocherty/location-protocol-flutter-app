@@ -1,6 +1,4 @@
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:web3dart/web3dart.dart';
 
 import 'package:location_protocol_flutter_app/src/builder/attestation_builder.dart';
 import 'package:location_protocol_flutter_app/src/eas/eip712_signer.dart';
@@ -8,24 +6,11 @@ import 'package:location_protocol_flutter_app/src/eas/local_key_signer.dart';
 import 'package:location_protocol_flutter_app/src/eas/schema_config.dart';
 import 'package:location_protocol_flutter_app/src/models/location_attestation.dart';
 
-/// Well-known Hardhat test account #0.
 const _testPrivateKey =
     '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const _testAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 
 void main() {
-  late EthPrivateKey privateKey;
-
-  setUp(() {
-    privateKey = EthPrivateKey.fromHex(_testPrivateKey);
-  });
-
-  group('EthPrivateKey', () {
-    test('derives correct address from test private key', () {
-      expect(privateKey.address.eip55With0x, _testAddress);
-    });
-  });
-
   group('EIP712Signer.computeDomainSeparator', () {
     test('is deterministic', () {
       final d1 = EIP712Signer.computeDomainSeparator(
@@ -49,7 +34,7 @@ void main() {
 
     test('changes with different chainId', () {
       final ds1 = EIP712Signer.computeDomainSeparator(
-        chainId: 1, // mainnet
+        chainId: 1,
         contractAddress: SchemaConfig.sepoliaContractAddress,
       );
       final ds2 = EIP712Signer.computeDomainSeparator(
@@ -74,7 +59,7 @@ void main() {
       final att = buildTestAttestation();
       final signed = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       expect(signed.signer, _testAddress);
     });
@@ -83,17 +68,17 @@ void main() {
       final att = buildTestAttestation();
       final signed = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       expect(signed.uid, startsWith('0x'));
-      expect(signed.uid.length, 66); // '0x' + 64 hex chars
+      expect(signed.uid.length, 66);
     });
 
     test('signature JSON contains v, r, s', () {
       final att = buildTestAttestation();
       final signed = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       final sig = signed.parsedSignature;
       expect(sig.containsKey('v'), isTrue);
@@ -106,7 +91,7 @@ void main() {
       final att = buildTestAttestation();
       final signed = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       final sig = signed.parsedSignature;
       final r = sig['r'].toString();
@@ -121,11 +106,11 @@ void main() {
       final att = buildTestAttestation();
       final s1 = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       final s2 = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       expect(s1.uid, s2.uid);
       expect(s1.signature, s2.signature);
@@ -135,7 +120,7 @@ void main() {
       final att = buildTestAttestation();
       final signed = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       expect(signed.version, SchemaConfig.attestationVersion);
     });
@@ -151,7 +136,7 @@ void main() {
       );
       final signed = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       expect(EIP712Signer.verifyLocationAttestation(attestation: signed),
           isTrue);
@@ -166,10 +151,9 @@ void main() {
       );
       final signed = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
 
-      // Replace signer with a different address
       final tampered = OffchainLocationAttestation(
         eventTimestamp: signed.eventTimestamp,
         srs: signed.srs,
@@ -203,7 +187,7 @@ void main() {
       );
       final signed = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
       final recovered = EIP712Signer.recoverSigner(attestation: signed);
       expect(recovered?.toLowerCase(), _testAddress.toLowerCase());
@@ -222,7 +206,7 @@ void main() {
 
     test('produces same result as sync method', () async {
       final att = buildTestAttestation();
-      final signer = LocalKeySigner(privateKey);
+      final signer = LocalKeySigner(_testPrivateKey);
 
       final asyncSigned = await EIP712Signer.signLocationAttestationWith(
         attestation: att,
@@ -230,7 +214,7 @@ void main() {
       );
       final syncSigned = EIP712Signer.signLocationAttestation(
         attestation: att,
-        privateKey: privateKey,
+        privateKeyHex: _testPrivateKey,
       );
 
       expect(asyncSigned.uid, syncSigned.uid);
@@ -240,7 +224,7 @@ void main() {
 
     test('produced attestation verifies correctly', () async {
       final att = buildTestAttestation();
-      final signer = LocalKeySigner(privateKey);
+      final signer = LocalKeySigner(_testPrivateKey);
 
       final signed = await EIP712Signer.signLocationAttestationWith(
         attestation: att,
@@ -255,7 +239,7 @@ void main() {
 
     test('signer address is set correctly', () async {
       final att = buildTestAttestation();
-      final signer = LocalKeySigner(privateKey);
+      final signer = LocalKeySigner(_testPrivateKey);
 
       final signed = await EIP712Signer.signLocationAttestationWith(
         attestation: att,

@@ -12,9 +12,8 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:web3dart/web3dart.dart';
-
 import 'attestation_signer.dart';
+import 'ecdsa_signature.dart';
 
 /// Signs EIP-712 attestations using an external wallet (copy/paste flow).
 class ExternalWalletSigner implements AttestationSigner {
@@ -43,7 +42,7 @@ class ExternalWalletSigner implements AttestationSigner {
 
   /// Not used — external wallets always sign via [signTypedData].
   @override
-  Future<MsgSignature> signDigest(Uint8List digest) {
+  Future<EcdsaSignature> signDigest(Uint8List digest) {
     throw UnsupportedError(
       'ExternalWalletSigner does not support raw-digest signing. '
       'Use signTypedData (EIP-712) instead.',
@@ -52,13 +51,13 @@ class ExternalWalletSigner implements AttestationSigner {
 
   /// Serializes [domain] / [types] / [message] to the standard EIP-712 JSON
   /// format expected by `eth_signTypedData_v4`, hands it to [onSignRequest],
-  /// then parses the returned hex signature into a [MsgSignature].
+  /// then parses the returned hex signature into a [EcdsaSignature].
   ///
   /// Note: uses `primaryType` (camelCase) — the standard browser wallet key.
   /// Privy's Kotlin SDK requires `primary_type` (snake_case), but MetaMask
   /// and other browser wallets expect camelCase.
   @override
-  Future<MsgSignature> signTypedData({
+  Future<EcdsaSignature> signTypedData({
     required Map<String, dynamic> domain,
     required Map<String, dynamic> types,
     required Map<String, dynamic> message,
@@ -87,7 +86,7 @@ class ExternalWalletSigner implements AttestationSigner {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
-  static MsgSignature _parseSignature(String hexSig) {
+  static EcdsaSignature _parseSignature(String hexSig) {
     final hex =
         hexSig.startsWith('0x') ? hexSig.substring(2) : hexSig;
     if (hex.length != 130) {
@@ -100,6 +99,6 @@ class ExternalWalletSigner implements AttestationSigner {
     int v = int.parse(hex.substring(128, 130), radix: 16);
     // eth_signTypedData_v4 returns v as 0/1; ecRecover expects 27/28.
     if (v < 27) v += 27;
-    return MsgSignature(r, s, v);
+    return EcdsaSignature(r, s, v);
   }
 }

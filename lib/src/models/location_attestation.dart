@@ -7,6 +7,7 @@ import '../eas/schema_config.dart';
 /// An unsigned location attestation containing all data fields from the
 /// EAS Location Protocol schema before signing.
 class UnsignedLocationAttestation {
+  final String lpVersion;
   final int eventTimestamp;
   final String srs;
   final String locationType;
@@ -21,6 +22,7 @@ class UnsignedLocationAttestation {
   final bool revocable;
 
   const UnsignedLocationAttestation({
+    this.lpVersion = '1.0.0',
     required this.eventTimestamp,
     required this.srs,
     required this.locationType,
@@ -36,6 +38,7 @@ class UnsignedLocationAttestation {
   });
 
   Map<String, dynamic> toJson() => {
+        'lpVersion': lpVersion,
         'eventTimestamp': eventTimestamp,
         'srs': srs,
         'locationType': locationType,
@@ -52,6 +55,7 @@ class UnsignedLocationAttestation {
 
   factory UnsignedLocationAttestation.fromJson(Map<String, dynamic> json) =>
       UnsignedLocationAttestation(
+        lpVersion: json['lpVersion'] as String? ?? '1.0.0',
         eventTimestamp: json['eventTimestamp'] as int,
         srs: json['srs'] as String,
         locationType: json['locationType'] as String,
@@ -74,6 +78,7 @@ class OffchainLocationAttestation extends UnsignedLocationAttestation {
   final String version;
 
   const OffchainLocationAttestation({
+    super.lpVersion,
     required super.eventTimestamp,
     required super.srs,
     required super.locationType,
@@ -154,6 +159,7 @@ class OffchainLocationAttestation extends UnsignedLocationAttestation {
 
   factory OffchainLocationAttestation.fromJson(Map<String, dynamic> json) =>
       OffchainLocationAttestation(
+        lpVersion: json['lpVersion'] as String? ?? '1.0.0',
         eventTimestamp: json['eventTimestamp'] as int,
         srs: json['srs'] as String,
         locationType: json['locationType'] as String,
@@ -183,6 +189,7 @@ class OffchainLocationAttestation extends UnsignedLocationAttestation {
     );
 
     return OffchainLocationAttestation(
+      lpVersion: decoded['lpVersion'] as String? ?? '1.0.0',
       eventTimestamp: _parseIntOrString(message['time']),
       srs: decoded['srs'] as String,
       locationType: decoded['locationType'] as String,
