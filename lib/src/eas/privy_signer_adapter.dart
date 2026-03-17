@@ -102,7 +102,7 @@ class PrivySignerAdapter implements AttestationSigner {
   /// The typed-data JSON uses `primary_type` (snake_case) as required by the
   /// Privy Flutter SDK.
   @override
-  Future<MsgSignature> signTypedData({
+  Future<EcdsaSignature> signTypedData({
     required Map<String, dynamic> domain,
     required Map<String, dynamic> types,
     required Map<String, dynamic> message,

@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
+// ignore: depend_on_referenced_packages
 import 'package:blockchain_utils/blockchain_utils.dart';
+// ignore: depend_on_referenced_packages
 import 'package:on_chain/on_chain.dart';
 
 import 'attestation_signer.dart';
