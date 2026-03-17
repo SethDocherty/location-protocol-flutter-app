@@ -22,7 +22,7 @@ void main() {
 
   group('EthPrivateKey', () {
     test('derives correct address from test private key', () {
-      expect(privateKey.address.hexEip55, _testAddress);
+      expect(privateKey.address.eip55With0x, _testAddress);
     });
   });
 
