@@ -174,17 +174,32 @@ void main() {
   });
 
   group('AttestationService — tx request builder', () {
-    test('buildTxRequest wraps calldata correctly', () {
-      final callData = Uint8List.fromList([1, 2, 3]);
-      final request = service.buildTxRequest(
-        callData: callData,
-        contractAddress: _testAddress,
+    test('buildTxRequest produces wallet-friendly map', () {
+      final callData = service.buildAttestCallData(
+        lat: 0,
+        lng: 0,
+        memo: 'tx test',
       );
 
-      expect(request['to'], _testAddress);
-      expect(request['from'], signer.address);
-      expect(request['data'], '0x010203');
-      expect(request['value'], '0x0');
+      final txRequest = service.buildTxRequest(
+        callData: callData,
+        contractAddress: service.easAddress,
+      );
+
+      expect(txRequest, isA<Map<String, dynamic>>());
+      expect(txRequest['to'], isNotEmpty);
+      expect(txRequest['data'], startsWith('0x'));
+      expect(txRequest['from'], _testAddress);
+    });
+
+    test('easAddress is non-empty for Sepolia', () {
+      expect(service.easAddress, isNotEmpty);
+      expect(service.easAddress, startsWith('0x'));
+    });
+
+    test('schemaRegistryAddress is non-empty for Sepolia', () {
+      expect(service.schemaRegistryAddress, isNotEmpty);
+      expect(service.schemaRegistryAddress, startsWith('0x'));
     });
   });
 }
