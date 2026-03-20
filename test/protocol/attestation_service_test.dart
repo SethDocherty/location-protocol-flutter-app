@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:location_protocol/location_protocol.dart';
 import 'package:location_protocol_flutter_app/protocol/attestation_service.dart';
@@ -139,6 +141,50 @@ void main() {
       final b = await service.signOffchain(lat: 1, lng: 1, memo: 'b');
 
       expect(a.uid, isNot(b.uid));
+    });
+  });
+
+  group('AttestationService — onchain calldata builders', () {
+    test('buildAttestCallData returns non-empty Uint8List', () {
+      final callData = service.buildAttestCallData(
+        lat: 37.7749,
+        lng: -122.4194,
+        memo: 'onchain test',
+      );
+
+      expect(callData, isA<Uint8List>());
+      expect(callData.isNotEmpty, isTrue);
+    });
+
+    test('buildTimestampCallData returns non-empty Uint8List', () {
+      final callData = service.buildTimestampCallData(
+        '0x${'ab' * 32}',
+      );
+
+      expect(callData, isA<Uint8List>());
+      expect(callData.isNotEmpty, isTrue);
+    });
+
+    test('buildRegisterSchemaCallData returns non-empty Uint8List', () {
+      final callData = service.buildRegisterSchemaCallData();
+
+      expect(callData, isA<Uint8List>());
+      expect(callData.isNotEmpty, isTrue);
+    });
+  });
+
+  group('AttestationService — tx request builder', () {
+    test('buildTxRequest wraps calldata correctly', () {
+      final callData = Uint8List.fromList([1, 2, 3]);
+      final request = service.buildTxRequest(
+        callData: callData,
+        contractAddress: _testAddress,
+      );
+
+      expect(request['to'], _testAddress);
+      expect(request['from'], signer.address);
+      expect(request['data'], '0x010203');
+      expect(request['value'], '0x0');
     });
   });
 }
