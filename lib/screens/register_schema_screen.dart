@@ -6,6 +6,7 @@ import 'package:privy_flutter/privy_flutter.dart';
 
 import '../protocol/attestation_service.dart';
 import '../protocol/schema_config.dart';
+import '../utils/network_links.dart';
 
 /// Screen for registering the app's EAS schema onchain.
 class RegisterSchemaScreen extends StatefulWidget {
@@ -130,19 +131,38 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
             ] else if (_isRegistered) ...[
               Card(
                 color: Colors.blue.withValues(alpha: 0.1),
-                child: const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Row(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
                     children: [
-                      Icon(Icons.check_circle, color: Colors.blue),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'This schema is already registered onchain. '
-                          'No further action required.',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                      const Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.blue),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'This schema is already registered onchain.',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
                       ),
+                      if (NetworkLinks.getEasScanSchemaUrl(widget.service.chainId, AppSchema.schemaUID) != null) ...[
+                        const SizedBox(height: 12),
+                        TextButton.icon(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'View at: ${NetworkLinks.getEasScanSchemaUrl(widget.service.chainId, AppSchema.schemaUID)}',
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('View Schema on EAS Scan'),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -260,6 +280,36 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
                             ),
                           ),
                         ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          if (NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!) != null)
+                            TextButton.icon(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('View at: ${NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!)}'),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.open_in_new),
+                              label: const Text('Block Explorer'),
+                            ),
+                          if (NetworkLinks.getEasScanSchemaUrl(widget.service.chainId, AppSchema.schemaUID) != null)
+                            TextButton.icon(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('View at: ${NetworkLinks.getEasScanSchemaUrl(widget.service.chainId, AppSchema.schemaUID)}'),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.open_in_new),
+                              label: const Text('EAS Scan'),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),

@@ -43,15 +43,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _save() async {
     if (_service == null) return;
-    await _service!.setRpcUrl(_rpcController.text.trim());
-    await _service!.setSelectedChainId(_chainId);
-    await _service!.setInfuraApiKey(_infuraKeyController.text.trim());
-    final key = _keyController.text.trim();
-    if (key.isNotEmpty) {
-      await _service!.setPrivateKeyHex(key);
+
+    final rawKey = _keyController.text.trim().replaceAll(RegExp(r'\s+'), '');
+    if (rawKey.isNotEmpty) {
+      // Validate key format
+      var checkKey = rawKey;
+      if (checkKey.startsWith('0x')) checkKey = checkKey.substring(2);
+
+      if (checkKey.length != 64 || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(checkKey)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Invalid Private Key (must be a 64-character hex string)',
+              ),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+        return;
+      }
+      await _service!.setPrivateKeyHex(rawKey);
     } else {
       await _service!.clearPrivateKey();
     }
+
+    await _service!.setRpcUrl(_rpcController.text.trim());
+    await _service!.setSelectedChainId(_chainId);
+    await _service!.setInfuraApiKey(_infuraKeyController.text.trim());
+
     if (mounted) {
       ScaffoldMessenger.of(
         context,

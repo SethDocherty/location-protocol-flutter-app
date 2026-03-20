@@ -132,6 +132,28 @@ class AttestationService {
     return returnedUid == uid;
   }
 
+  /// Checks if a UID has already been timestamped onchain.
+  Future<bool> isTimestamped(String uid) async {
+    final timestamp = await getTimestamp(uid);
+    if (timestamp == null || timestamp.isEmpty) return false;
+    // Returns 32 bytes of 0 if not set.
+    return timestamp != '0x0000000000000000000000000000000000000000000000000000000000000000';
+  }
+
+  /// Fetches the raw timestamp record for a UID.
+  Future<String?> getTimestamp(String uid) async {
+    // timestamps(bytes32) selector: 0xb8006d96
+    final callData = '0xb8006d96${uid.replaceFirst('0x', '')}';
+    try {
+      return await _rpcCall('eth_call', [
+        {'to': easAddress, 'data': callData},
+        'latest'
+      ]);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Fetches a raw schema record from the registry.
   Future<String?> getSchemaRecord(String uid) async {
     // getSchema(bytes32) selector: 0xa2ea7c6e (official EAS SchemaRegistry)

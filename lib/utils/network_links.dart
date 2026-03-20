@@ -55,6 +55,13 @@ class NetworkLinks {
     return '$domain/attestation/view/$uid';
   }
 
+  /// Returns the EAS Scan URL for a specific schema UID, or null if unsupported.
+  static String? getEasScanSchemaUrl(int chainId, String uid) {
+    final domain = _easScanDomains[chainId];
+    if (domain == null) return null;
+    return '$domain/schema/view/$uid';
+  }
+
   /// Returns the Block Explorer URL for a specific transaction hash, or null if unsupported.
   static String? getExplorerTxUrl(int chainId, String txHash) {
     final domain = _explorerDomains[chainId];

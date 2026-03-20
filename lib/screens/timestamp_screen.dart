@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:privy_flutter/privy_flutter.dart';
 
 import '../protocol/attestation_service.dart';
+import '../utils/network_links.dart';
 
 /// Screen for timestamping an offchain attestation UID onchain.
 class TimestampScreen extends StatefulWidget {
@@ -46,6 +47,18 @@ class _TimestampScreenState extends State<TimestampScreen> {
     });
 
     try {
+      // Check if already timestamped
+      final exists = await widget.service.isTimestamped(uid);
+      if (exists) {
+        if (mounted) {
+          setState(() {
+            _error = 'Error: This UID has already been timestamped onchain.';
+            _submitting = false;
+          });
+        }
+        return;
+      }
+
       final callData = widget.service.buildTimestampCallData(uid);
       final txRequest = widget.service.buildTxRequest(
         callData: callData,
@@ -56,15 +69,21 @@ class _TimestampScreenState extends State<TimestampScreen> {
         EthereumRpcRequest(method: 'eth_sendTransaction', params: [jsonEncode(txRequest)]),
       );
 
-      late String txHash;
+      String? hash;
       result.fold(
-        onSuccess: (r) => txHash = r.data,
-        onFailure: (e) => throw Exception('Transaction failed: ${e.message}'),
+        onSuccess: (r) => hash = r.data,
+        onFailure: (e) {
+          final message = e.message;
+          if (message.contains('0x2e267946') || message.contains('.&yF')) {
+             throw Exception('This UID has already been timestamped onchain.');
+          }
+          throw Exception('Transaction failed: $message');
+        },
       );
 
-      if (mounted) setState(() => _txHash = txHash);
+      if (mounted && hash != null) setState(() => _txHash = hash);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -111,7 +130,12 @@ class _TimestampScreenState extends State<TimestampScreen> {
                 color: Theme.of(context).colorScheme.errorContainer,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(_error!),
+                  child: Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -136,6 +160,22 @@ class _TimestampScreenState extends State<TimestampScreen> {
                           fontSize: 12,
                         ),
                       ),
+                      if (NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!) != null) ...[
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'View at: ${NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!)}',
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('View on Block Explorer'),
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -24,6 +24,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _chainId = 11155111; // default until settings load
   String? _rpcUrl;
+  String? _privateKeyHex;
 
   @override
   void initState() {
@@ -37,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _chainId = settings.selectedChainId;
         _rpcUrl = settings.rpcUrl;
+        _privateKeyHex = settings.privateKeyHex;
       });
     }
   }
@@ -188,21 +190,67 @@ class _HomeScreenState extends State<HomeScreen> {
       icon: Icons.key,
       label: 'Sign with Private Key',
       onPressed: () async {
-        final key = await showPrivateKeyImportDialog(context);
-        if (key == null || !context.mounted) return;
-        final signer = LocalKeySigner(privateKeyHex: key);
-        final service = AttestationService(
-          signer: signer,
-          chainId: _chainId,
-          fallbackRpcUrl: _rpcUrl,
-        );
-        if (context.mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => SignScreen(service: service)),
-          );
+        String? key = _privateKeyHex;
+        bool usingSaved = key != null && key.trim().isNotEmpty;
+
+        if (!usingSaved) {
+          key = await showPrivateKeyImportDialog(context);
         }
+
+        if (key == null || key.trim().isEmpty || !context.mounted) return;
+
+        // Ensure consistent formatting (strip 0x if present, common in protocol libs)
+        var finalKey = key.trim().replaceAll(RegExp(r'\s+'), '');
+        if (finalKey.startsWith('0x')) finalKey = finalKey.substring(2);
+
+        // Minimal validation before trying to use it
+        if (finalKey.length != 64 || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(finalKey)) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  usingSaved
+                      ? 'Saved Private Key is invalid (should be 64-char hex)'
+                      : 'Invalid Private Key entered',
+                ),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+            );
+          }
+          // If the saved key was bad, let the user enter a one-time key
+          if (usingSaved && context.mounted) {
+            final manualKey = await showPrivateKeyImportDialog(context);
+            if (manualKey != null && manualKey.trim().isNotEmpty && context.mounted) {
+              // Recurse once with the manual key or just handle it here.
+              // For simplicity, let's just use the manual key if it passes.
+              var cleanedManual = manualKey.trim().replaceAll(RegExp(r'\s+'), '');
+              if (cleanedManual.startsWith('0x')) cleanedManual = cleanedManual.substring(2);
+              if (cleanedManual.length == 64 && RegExp(r'^[0-9a-fA-F]+$').hasMatch(cleanedManual)) {
+                _launchSignScreen(cleanedManual);
+              }
+            }
+          }
+          return;
+        }
+
+        _launchSignScreen(finalKey);
       },
     );
+  }
+
+  void _launchSignScreen(String privateKeyHex) {
+    final signer = LocalKeySigner(privateKeyHex: privateKeyHex);
+    final service = AttestationService(
+      signer: signer,
+      chainId: _chainId,
+      fallbackRpcUrl: _rpcUrl,
+    );
+
+    if (mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => SignScreen(service: service)),
+      );
+    }
   }
 
   Widget _buildVerifyButton(BuildContext context) {
