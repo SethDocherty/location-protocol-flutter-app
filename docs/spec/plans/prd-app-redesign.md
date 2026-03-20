@@ -16,6 +16,7 @@ The Privy authentication module is extracted into a standalone, reusable module 
 - Extract Privy auth into a reusable module with no protocol dependencies
 - Add onchain capabilities: attestation, schema registration, offchain UID timestamping
 - Adopt library-native models (`SignedOffchainAttestation`, `VerificationResult`, `AttestResult`, etc.) directly — no app-domain wrappers
+- **Configurable Environments** — Provide UI for managing RPC endpoints and developer signing keys
 
 ## User Personas
 
@@ -112,6 +113,16 @@ The Privy authentication module is extracted into a standalone, reusable module 
 - [ ] The Privy module has zero imports from `lib/protocol/` or `location_protocol`
 - [ ] `flutter analyze` reports zero issues
 
+### US-009: Configure Developer Settings
+
+**As a** developer/tester, **I want** to configure RPC URLs and test private keys **so that** I can test onchain operations across different networks without rebuilding the app.
+
+**Acceptance Criteria:**
+- [ ] Settings screen allows entry of RPC URL and Private Key
+- [ ] Values are persisted across app restarts using `SharedPreferences`
+- [ ] `AttestationService` uses these values when in "Private Key" mode
+- [ ] `flutter analyze` reports zero issues
+
 ## Functional Requirements
 
 ### Protocol Bridge
@@ -158,7 +169,7 @@ The Privy authentication module is extracted into a standalone, reusable module 
   - `timestampOffchain(String uid)` → `Future<TimestampResult>` via `EASClient.timestamp()`
 
 - **FR-5:** `AttestationService` MUST create `LPPayload` objects from user input:
-  - `lpVersion`: from `LPVersion.current`
+  - `lpVersion`: from `LPVersion.current` (`0.2.0`)
   - `srs`: `'http://www.opengis.net/def/crs/OGC/1.3/CRS84'`
   - `locationType`: `'geojson-point'`
   - `location`: `{'type': 'Point', 'coordinates': [lng, lat]}`
@@ -170,6 +181,13 @@ The Privy authentication module is extracted into a standalone, reusable module 
   - `'mediaType'`: `List<String>` (default empty)
   - `'mediaData'`: `List<Uint8List>` (default empty)
   - `'memo'`: `String`
+
+### Settings module
+
+- **FR-14:** The app MUST implement a `SettingsService` using `SharedPreferences` to manage:
+  - `rpcUrl`: user-configured Ethereum RPC endpoint
+  - `privateKey`: user-configured developer signing key (not for production use)
+  - `chainId`: target chain for dev operations
 
 ### Privy Module
 
@@ -186,11 +204,11 @@ The Privy authentication module is extracted into a standalone, reusable module 
 
 - **FR-10:** `HomeScreen` MUST be auth-gated and show:
   - When unauthenticated: login button + "Sign with Private Key" button
-  - When authenticated: wallet address, buttons for all 5 operations (Sign Offchain, Attest Onchain, Register Schema, Verify, Timestamp), plus Sign with Private Key and Sign with External Wallet
+  - When authenticated: wallet address, buttons for all 5 operations (Sign Offchain, Attest Onchain, Register Schema, Verify, Timestamp), plus Sign with Private Key and Sign with External Wallet, and a **Settings** link
 
 - **FR-11:** All screens MUST use library-native models directly (`SignedOffchainAttestation`, `VerificationResult`, `AttestResult`, `RegisterResult`, `TimestampResult`). No app-specific attestation model classes.
 
-- **FR-12:** The `VerifyScreen` MUST accept pasted JSON and reconstruct a `SignedOffchainAttestation` for verification. This requires JSON deserialization logic (the library does not currently provide this — the app must handle it).
+- **FR-12:** The `VerifyScreen` MUST accept pasted JSON and reconstruct a `SignedOffchainAttestation` for verification. This requires JSON deserialization logic (implemented within the app's script layer).
 
 ### Code Removal
 
@@ -214,7 +232,7 @@ The Privy authentication module is extracted into a standalone, reusable module 
 ## Non-Functional Requirements
 
 - **Performance:** Offchain signing latency (user tap → result displayed) MUST be under 2 seconds on mid-range hardware.
-- **Security:** Raw private keys entered in the import dialog MUST NOT be persisted to disk or logged. Privy wallet keys never leave the Privy SDK enclave.
+- **Security:** Raw private keys entered in the import dialog MUST NOT be persisted to disk or logged unless explicitly stored by the user in the Settings module. Privy wallet keys never leave the Privy SDK enclave.
 - **Testability:** `PrivySigner` and `ExternalWalletSigner` MUST accept an injected request callable (`Future<String> Function(String method, List<dynamic> params)`) for unit testing without a real Privy SDK or wallet. This replaces the wallet SDK's `provider.request` call, allowing tests to return canned signature responses.
 
 ## Out of Scope
@@ -231,11 +249,14 @@ The Privy authentication module is extracted into a standalone, reusable module 
 
 ### New File Structure
 
+> [!NOTE]
+> The file structure below was refined and better defined during the creation of the implementation plan to ensure clean separation of concerns and reusability.
+
 ```
 lib/
-├── main.dart
-├── privy/                              # Standalone auth module
-│   ├── privy_module.dart               # Barrel export
+├── main.dart                               # Rewired: PrivyAuthProvider + AttestationServiceProvider
+├── privy/                                  # Standalone auth module
+│   ├── privy_module.dart                   # Barrel export
 │   ├── privy_manager.dart
 │   ├── privy_auth_provider.dart
 │   ├── privy_auth_config.dart
@@ -248,22 +269,26 @@ lib/
 │       ├── email_flow.dart
 │       ├── oauth_flow.dart
 │       └── siwe_flow.dart
-├── protocol/                           # Bridge: Privy ↔ location_protocol
-│   ├── protocol_module.dart            # Barrel export
-│   ├── privy_signer.dart               # Signer impl for Privy wallets
-│   ├── external_wallet_signer.dart     # Signer impl for external wallets
-│   ├── schema_config.dart              # App's SchemaDefinition
-│   ├── attestation_service.dart        # High-level operation orchestrator
+├── protocol/                               # Bridge: Privy ↔ location_protocol
+│   ├── protocol_module.dart                # Barrel export
+│   ├── privy_signer.dart                   # extends Signer (injectable RPC caller)
+│   ├── external_wallet_signer.dart         # extends Signer (callback-driven)
+│   ├── schema_config.dart                  # App's SchemaDefinition + LP defaults
+│   ├── attestation_service.dart            # Orchestrator: offchain + onchain ops
 │   └── attestation_service_provider.dart
+├── settings/                               # NEW: Dev/test config
+│   ├── settings_service.dart               # SharedPreferences wrapper
+│   └── settings_screen.dart                # RPC URL, private key config UI
 ├── screens/
 │   ├── home_screen.dart
 │   ├── sign_screen.dart
 │   ├── verify_screen.dart
-│   ├── onchain_attest_screen.dart      # NEW
-│   ├── register_schema_screen.dart     # NEW
+│   ├── onchain_attest_screen.dart          # NEW
+│   ├── register_schema_screen.dart         # NEW
 │   └── timestamp_screen.dart           # NEW
 └── widgets/
-    ├── attestation_result_card.dart
+    ├── attestation_result_card.dart        # NEW: Reusable result display
+    ├── chain_selector.dart                 # NEW: Chain configuration dropdown
     ├── private_key_import_dialog.dart
     └── external_sign_dialog.dart
 ```
@@ -275,6 +300,7 @@ lib/
 | `location_protocol` (git) | All EAS/EIP-712/ABI logic + Signer, TxUtils, static builders | Update git ref to Signer-enabled commit |
 | `privy_flutter: ^0.4.0` | Auth + embedded wallets | No change |
 | `flutter_dotenv: ^5.1.0` | Environment config | No change |
+| `shared_preferences: ^2.2.2` | Persistent dev settings | **NEW** |
 | `convert: ^3.1.1` | Hex encoding | No change |
 
 ### Dependencies to Evaluate for Removal
@@ -304,7 +330,7 @@ The same pipeline applies to schema registration (`SchemaRegistryClient.buildReg
 
 **2. Instance methods (for private-key dev/test path)**
 
-`EASClient` and `SchemaRegistryClient` instance methods manage the full lifecycle (ABI encoding → transaction signing → broadcasting → receipt polling) internally. They require a `DefaultRpcProvider` with a raw private key and RPC URL:
+`EASClient` and `SchemaRegistryClient` instance methods manage the full lifecycle (ABI encoding → transaction signing → broadcasting → receipt polling) internally. They require a `DefaultRpcProvider` with a raw private key and RPC URL (sourced from the `Settings` module):
 
 ```
 DefaultRpcProvider(rpcUrl: '...', privateKeyHex: '...', chainId: 11155111)
@@ -329,9 +355,16 @@ As a result, old-app attestations cannot be verified by the new app, and new-app
 ### Risks
 
 - **Privy `eth_signTypedData_v4` compatibility:** The EIP-712 typed data JSON map produced by the library's `OffchainSigner.buildOffchainTypedDataJson()` must match the format Privy's embedded wallet expects. The Privy Flutter SDK may have specific requirements for key ordering, type encoding, or `chainId` format (number vs. hex). All `uint*` values are emitted as decimal strings and all `bytes*`/`address` values as `0x`-prefixed hex strings — this is the standard EIP-712 JSON format, but must be integration tested.
+<[!NOTE] Tested and verified against standard EIP-712 JSON format.
+
 - **Schema parity:** The 10-field schema must produce identical ABI encoding and schema UID via the library as it does via the current custom code. This is a golden-value verification test (acknowledging the SRS change will produce a different UID than the old app — parity is verified against the library's own expected values).
+<[!NOTE] SRS change acknowledged as causing a deterministic UID shift.
+
 - **Onchain operations require gas:** The app currently only does offchain signing (zero gas). Onchain features need a wallet with funds. This is a UX complexity increase.
+<[!NOTE] Addressed via the integration of `ChainSelector` and `Settings` module for dev network testing.
+
 - **Transaction receipt handling:** After submitting via `eth_sendTransaction`, the app needs the txHash to display results. Extracting the UID from event logs (for onchain attestations) requires receipt parsing, which is handled differently depending on the path — see Open Question 5.
+<[!NOTE] Post-submission UX will show txHash immediately; full receipt polling is deferred (YAGNI).
 
 ### Migration Testing
 
@@ -349,17 +382,25 @@ To verify correct operation of the redesigned app:
 
 ## Open Questions
 
-1. **Onchain RPC URL configuration:** Where should users configure the RPC endpoint for the private-key dev/test path? Environment variable (`.env`), in-app settings, or hardcoded per chain? Note: the primary Privy wallet path does not need an RPC URL for transaction submission (it uses static builders + `eth_sendTransaction`). An RPC URL is only needed for the private-key path and optionally for receipt polling. (A) Use pre-configured values in an `.env` file that developers can modify for testing and an in-app settings menu where a user can enter their Wallet Private Key and RPC URL and RPC Private Key.
+1.  **Onchain RPC URL configuration:** Where should users configure the RPC endpoint for the private-key dev/test path? Environment variable (`.env`), in-app settings, or hardcoded per chain?
+    -   **Answer:** The app will use a mixed approach: sensitive/default environment variables via `.env` for bootstrapping, and a dedicated `SettingsScreen`/`SettingsService` (persisted via `SharedPreferences`) for runtime configuration of RPC URLs and private keys.
 
 2. ~~**Onchain transaction signing with Privy:**~~ **Resolved.** The library provides the static builder pipeline: `EASClient.buildAttestCallData()` → `TxUtils.buildTxRequest()` → `wallet.provider.request('eth_sendTransaction', [txRequest])`. See [How to build wallet-based onchain transactions](https://github.com/DecentralizedGeo/location-protocol-dart/blob/main/docs/guides/how-to-wallet-onchain-transactions.md).
+    -   **Answer:** **Resolved.** The library provides the static builder pipeline: `EASClient.buildAttestCallData()` → `TxUtils.buildTxRequest()` → `wallet.provider.request('eth_sendTransaction', [txRequest])`.
 
-3. **JSON deserialization for VerifyScreen:** Should the app define its own JSON → `SignedOffchainAttestation` parsing, or should this be contributed upstream as `SignedOffchainAttestation.fromJson()`? (A) Use your judgment to implement JSON parsing within the app for now, as it's only needed in one place (the Verify screen) and the library's core focus is on signing and verification logic rather than data serialization. If the JSON parsing logic proves reusable or if there's demand for it in other contexts, it can be contributed upstream in a future library update.
+3.  **JSON deserialization for VerifyScreen:** Should the app define its own JSON → `SignedOffchainAttestation` parsing, or should this be contributed upstream?
+    -   **Answer:** The app will implement custom JSON parsing within the `VerifyScreen` logic for now to maintain isolation. Upstream contribution is deferred until the pattern is proven.
 
-4. **Schema versioning:** If the upstream library's `LPVersion.current` changes, attestations with the old version will have different UIDs. Should the app pin a specific version or always use `current`? (`LPVersion.current` is currently `"1.0.0"`.) (A) Always use `current`.
+4. **Schema versioning:** If the upstream library's `LPVersion.current` changes, attestations with the old version will have different UIDs. Should the app pin a specific version or always use `current`? (`LPVersion.current` is currently `"1.0.0"`.)
+    -   **Answer:** Always use `LPVersion.current` (`0.2.0`).
 
-5. **Transaction receipt polling for Privy wallet path:** After submitting an onchain transaction via `wallet.provider.request('eth_sendTransaction', [txRequest])`, the app receives a txHash but needs to wait for confirmation and extract the UID/timestamp from event logs to display `AttestResult`/`TimestampResult`. Options to investigate during implementation:
+5. **Transaction receipt polling for Privy wallet path:** How to handle confirmation after receipt of txHash? After submitting an onchain transaction via `wallet.provider.request('eth_sendTransaction', [txRequest])`, the app receives a txHash but needs to wait for confirmation and extract the UID/timestamp from event logs to display `AttestResult`/`TimestampResult`. Options to investigate during implementation:
    - Use Privy SDK's own transaction confirmation callbacks (if available)
    - Instantiate a read-only `DefaultRpcProvider` solely for `waitForReceipt(txHash)` + log parsing (requires an RPC URL)
    - Show txHash immediately and let users verify on a block explorer (deferred UX)
 
+   -   **Answer:** (A) Defer complex receipt polling (YAGNI). Show the txHash immediately with a link to a block explorer.
+
 6. **Start Over vs Iterative Refactor:** Should the redesign be implemented as a complete rewrite in a new branch (`start-over`), or as an iterative refactor on the existing codebase (`iterative-refactor`)? (A) After reviewing the PRD and existing code base finds that it's more efficient to start with a clean slate given the extensive code removal and architectural changes, defer to a complete rewrite while migrating components and features that can be preserved (or are essential for continuity, like the Privy auth flows). The new code can be developed in a `start-over` branch and then merged back into main when complete, rather than trying to incrementally refactor the existing code. This approach minimizes merge conflicts and allows for a more flexible redesign process.
+
+    -   **Answer:** (A) A "start-over" approach in a dedicated branch was selected to ensure the clean removal of legacy protocol code while migrating essential auth flows.
