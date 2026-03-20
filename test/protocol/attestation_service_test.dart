@@ -190,6 +190,8 @@ void main() {
       expect(txRequest['to'], isNotEmpty);
       expect(txRequest['data'], startsWith('0x'));
       expect(txRequest['from'], _testAddress);
+      // Privy Android SDK requires chainId as 0x-prefixed hex.
+      expect(txRequest['chainId'], '0xaa36a7'); // 11155111 in hex
     });
 
     test('easAddress is non-empty for Sepolia', () {

@@ -80,15 +80,20 @@ class AttestationService {
   }
 
   /// Wraps calldata into a wallet-friendly tx request map.
+  ///
+  /// Includes `chainId` as a 0x-prefixed hex string, required by Privy's
+  /// Android SDK for `eth_sendTransaction`.
   Map<String, dynamic> buildTxRequest({
     required Uint8List callData,
     required String contractAddress,
   }) {
-    return TxUtils.buildTxRequest(
+    final tx = TxUtils.buildTxRequest(
       to: contractAddress,
       data: callData,
       from: signer.address,
     );
+    // Privy Android SDK requires chainId in the tx object (EIP-155).
+    return {...tx, 'chainId': '0x${chainId.toRadixString(16)}'};
   }
 
   /// The EAS contract address for the current chain.

@@ -91,6 +91,33 @@ void main() {
       expect(decoded['domain']['name'], 'EAS');
     });
 
+    test('remaps primaryType to primary_type for Privy Android SDK', () async {
+      String? capturedJson;
+
+      final signer = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (_, params) async {
+          capturedJson = params[1] as String;
+          return '0x${'ab' * 32}${'cd' * 32}1b';
+        },
+      );
+
+      await signer.signTypedData({
+        'domain': {'name': 'EAS Attestation'},
+        'types': {'Attest': []},
+        'primaryType': 'Attest',
+        'message': {'version': '2'},
+      });
+
+      final decoded = jsonDecode(capturedJson!) as Map<String, dynamic>;
+      // Privy Android SDK requires snake_case 'primary_type', not camelCase.
+      expect(decoded.containsKey('primary_type'), isTrue,
+          reason: 'Privy Android SDK requires primary_type (snake_case)');
+      expect(decoded.containsKey('primaryType'), isFalse,
+          reason: 'primaryType (camelCase) must be removed');
+      expect(decoded['primary_type'], 'Attest');
+    });
+
     test('returns EIP712Signature parsed from hex response', () async {
       final signer = PrivySigner(
         walletAddress: _testAddress,
@@ -198,8 +225,14 @@ void main() {
       final privySigner = PrivySigner(
         walletAddress: _testAddress,
         rpcCaller: (method, params) async {
-          // Parse the typed data JSON, pass to LocalKeySigner, return hex.
+          // Parse the typed data JSON that PrivySigner sends to Privy.
+          // PrivySigner remaps primaryType → primary_type for the Privy SDK.
+          // LocalKeySigner uses on_chain which expects the EIP-712 camelCase key,
+          // so we remap it back here (as the real Privy SDK would handle it natively).
           final typedData = jsonDecode(params[1] as String) as Map<String, dynamic>;
+          if (typedData.containsKey('primary_type')) {
+            typedData['primaryType'] = typedData.remove('primary_type');
+          }
           final sig = await localSigner.signTypedData(typedData);
           // Reconstruct 65-byte hex: r(32) + s(32) + v(1)
           final rHex = sig.r.substring(2); // strip 0x

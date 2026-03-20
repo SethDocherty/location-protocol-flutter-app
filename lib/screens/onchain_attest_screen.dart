@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:privy_flutter/privy_flutter.dart';
 
@@ -65,7 +67,7 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
 
       // Send via Privy wallet
       final result = await widget.wallet.provider.request(
-        EthereumRpcRequest(method: 'eth_sendTransaction', params: [txRequest]),
+        EthereumRpcRequest(method: 'eth_sendTransaction', params: [jsonEncode(txRequest)]),
       );
 
       late String txHash;
