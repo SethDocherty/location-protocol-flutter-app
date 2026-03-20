@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:location_protocol/location_protocol.dart';
 import 'package:location_protocol_flutter_app/protocol/privy_signer.dart';
+import 'package:location_protocol_flutter_app/protocol/schema_config.dart';
 
 /// Well-known Hardhat test account #0.
 const _testPrivateKey =
@@ -185,6 +186,58 @@ void main() {
       // Verify the static method is accessible (compile-time check).
       // Actual invocation requires a real EmbeddedEthereumWallet.
       expect(PrivySigner.fromWallet, isA<Function>());
+    });
+  });
+
+  group('PrivySigner — E2E sign + verify via library', () {
+    test('sign with PrivySigner and verify round-trips', () async {
+      // Use LocalKeySigner to produce the "real" signature that a wallet would return.
+      final localSigner = LocalKeySigner(privateKeyHex: _testPrivateKey);
+
+      // Build a mock PrivySigner that delegates to LocalKeySigner's signTypedData.
+      final privySigner = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (method, params) async {
+          // Parse the typed data JSON, pass to LocalKeySigner, return hex.
+          final typedData = jsonDecode(params[1] as String) as Map<String, dynamic>;
+          final sig = await localSigner.signTypedData(typedData);
+          // Reconstruct 65-byte hex: r(32) + s(32) + v(1)
+          final rHex = sig.r.substring(2); // strip 0x
+          final sHex = sig.s.substring(2);
+          final vHex = sig.v.toRadixString(16).padLeft(2, '0');
+          return '0x$rHex$sHex$vHex';
+        },
+      );
+
+      final lpPayload = AppSchema.buildLPPayload(lat: 37.7749, lng: -122.4194);
+      final userData = AppSchema.buildUserData(
+        memo: 'E2E test',
+        eventTimestamp: BigInt.from(1700000000),
+      );
+
+      final chainId = 11155111; // Sepolia
+      final easAddress = ChainConfig.forChainId(chainId)!.eas;
+
+      final offchainSigner = OffchainSigner(
+        signer: privySigner,
+        chainId: chainId,
+        easContractAddress: easAddress,
+      );
+
+      final signed = await offchainSigner.signOffchainAttestation(
+        schema: AppSchema.definition,
+        lpPayload: lpPayload,
+        userData: userData,
+      );
+
+      expect(signed.signer.toLowerCase(), _testAddress.toLowerCase());
+      expect(signed.uid, isNotEmpty);
+      expect(signed.signature.v, anyOf(27, 28));
+
+      // Verify
+      final result = offchainSigner.verifyOffchainAttestation(signed);
+      expect(result.isValid, isTrue);
+      expect(result.recoveredAddress.toLowerCase(), _testAddress.toLowerCase());
     });
   });
 }
