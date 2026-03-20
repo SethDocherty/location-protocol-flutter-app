@@ -9,9 +9,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:privy_flutter/privy_flutter.dart';
-import 'package:privy_flutter/src/models/wallet_client_type/wallet_client_type.dart';
-import 'package:privy_flutter/src/models/wallet_login_metadata/wallet_login_metadata.dart';
-
 import '../privy_auth_config.dart';
 import '../privy_manager.dart';
 
@@ -313,7 +310,7 @@ class _SiweFlowState extends State<SiweFlow> {
         const SizedBox(height: 16),
         // Wallet type picker
         DropdownButtonFormField<WalletClientType>(
-          value: _walletClientType,
+          initialValue: _walletClientType,
           decoration: const InputDecoration(
             labelText: 'Wallet used to sign',
             border: OutlineInputBorder(),

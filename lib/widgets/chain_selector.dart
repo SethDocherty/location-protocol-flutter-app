@@ -17,7 +17,7 @@ class ChainSelector extends StatelessWidget {
     final chainIds = ChainConfig.supportedChainIds;
 
     return DropdownButtonFormField<int>(
-      value: selectedChainId,
+      initialValue: selectedChainId,
       decoration: const InputDecoration(
         labelText: 'Target Chain',
         border: OutlineInputBorder(),

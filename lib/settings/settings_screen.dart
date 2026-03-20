@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:location_protocol/location_protocol.dart';
 
 import '../widgets/chain_selector.dart';
 import 'settings_service.dart';

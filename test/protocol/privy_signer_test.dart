@@ -119,7 +119,7 @@ void main() {
   });
 
   group('PrivySigner — signature parsing', () {
-    PrivySigner _signerWith(String sigHex) {
+    PrivySigner signerWith(String sigHex) {
       return PrivySigner(
         walletAddress: _testAddress,
         rpcCaller: (_, __) async => sigHex,
@@ -127,7 +127,7 @@ void main() {
     }
 
     test('parses valid 65-byte 0x-prefixed signature', () async {
-      final sig = await _signerWith('0x${'aa' * 32}${'bb' * 32}1b')
+      final sig = await signerWith('0x${'aa' * 32}${'bb' * 32}1b')
           .signTypedData({'domain': {}, 'types': {}, 'message': {}});
       expect(sig.v, 27);
       expect(sig.r, startsWith('0x'));
@@ -135,13 +135,13 @@ void main() {
     });
 
     test('accepts signature without 0x prefix', () async {
-      final sig = await _signerWith('${'aa' * 32}${'bb' * 32}1c')
+      final sig = await signerWith('${'aa' * 32}${'bb' * 32}1c')
           .signTypedData({'domain': {}, 'types': {}, 'message': {}});
       expect(sig.v, 28);
     });
 
     test('throws FormatException for wrong-length signature', () {
-      final signer = _signerWith('0xdeadbeef');
+      final signer = signerWith('0xdeadbeef');
       expect(
         signer.signTypedData({'domain': {}, 'types': {}, 'message': {}}),
         throwsA(isA<FormatException>()),
@@ -149,7 +149,7 @@ void main() {
     });
 
     test('throws FormatException for empty signature', () {
-      final signer = _signerWith('');
+      final signer = signerWith('');
       expect(
         signer.signTypedData({'domain': {}, 'types': {}, 'message': {}}),
         throwsA(isA<FormatException>()),

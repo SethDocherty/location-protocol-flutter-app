@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:privy_flutter/privy_flutter.dart';
-import 'package:location_protocol/location_protocol.dart';
 
 import '../protocol/attestation_service.dart';
-import '../widgets/chain_selector.dart';
 
 /// Screen for creating an onchain attestation via the Privy wallet.
 ///
