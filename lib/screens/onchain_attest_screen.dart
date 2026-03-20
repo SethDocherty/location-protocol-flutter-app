@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:privy_flutter/privy_flutter.dart';
 
 import '../protocol/attestation_service.dart';
+import '../utils/network_links.dart';
 
 /// Screen for creating an onchain attestation via the Privy wallet.
 ///
@@ -30,6 +31,7 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
 
   bool _submitting = false;
   String? _txHash;
+  String? _uid;
   String? _error;
 
   @override
@@ -41,9 +43,11 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
   }
 
   Future<void> _submit() async {
+    if (!mounted) return;
     setState(() {
       _submitting = true;
       _txHash = null;
+      _uid = null;
       _error = null;
     });
 
@@ -70,23 +74,28 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
         EthereumRpcRequest(method: 'eth_sendTransaction', params: [jsonEncode(txRequest)]),
       );
 
-      late String txHash;
+      String? hash;
       result.fold(
-        onSuccess: (r) => txHash = r.data,
+        onSuccess: (r) => hash = r.data,
         onFailure: (e) => throw Exception('Transaction failed: ${e.message}'),
       );
 
-      if (mounted) setState(() => _txHash = txHash);
+      if (hash != null) {
+        if (mounted) {
+          setState(() {
+            _txHash = hash;
+          });
+        }
+        
+        // Wait for the UID
+        final uid = await widget.service.waitForAttestationUid(hash!);
+        if (mounted) setState(() => _uid = uid);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
-  }
-
-  String _explorerUrl(String txHash) {
-    // Default to Sepolia Etherscan
-    return 'https://sepolia.etherscan.io/tx/$txHash';
   }
 
   @override
@@ -185,20 +194,55 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
                           fontSize: 12,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: () {
-                          // In a real app, launch URL. For now, copy.
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'View at: ${_explorerUrl(_txHash!)}',
-                              ),
+                      if (_uid != null) ...[
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          'Attestation UID: $_uid',
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                          ),
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 16),
+                        const Row(
+                          children: [
+                            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 16),
+                            Text('Waiting for transaction to be mined...'),
+                          ]
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          if (NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!) != null)
+                            TextButton.icon(
+                              onPressed: () {
+                                // In a real app, launch URL. For now, copy/toast.
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('View at: ${NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!)}'),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.open_in_new),
+                              label: const Text('Block Explorer'),
                             ),
-                          );
-                        },
-                        icon: const Icon(Icons.open_in_new),
-                        label: const Text('View on Block Explorer'),
+                          if (_uid != null && NetworkLinks.getEasScanAttestationUrl(widget.service.chainId, _uid!) != null)
+                            TextButton.icon(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('View at: ${NetworkLinks.getEasScanAttestationUrl(widget.service.chainId, _uid!)}'),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.open_in_new),
+                              label: const Text('EAS Scan'),
+                            ),
+                        ],
                       ),
                     ],
                   ),
