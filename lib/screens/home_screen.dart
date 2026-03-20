@@ -23,16 +23,22 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _chainId = 11155111; // default until settings load
+  String? _rpcUrl;
 
   @override
   void initState() {
     super.initState();
-    _loadChainId();
+    _loadSettings();
   }
 
-  Future<void> _loadChainId() async {
+  Future<void> _loadSettings() async {
     final settings = await SettingsService.create();
-    if (mounted) setState(() => _chainId = settings.selectedChainId);
+    if (mounted) {
+      setState(() {
+        _chainId = settings.selectedChainId;
+        _rpcUrl = settings.rpcUrl;
+      });
+    }
   }
 
   @override
@@ -57,8 +63,8 @@ class _HomeScreenState extends State<HomeScreen> {
               await Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SettingsScreen()),
               );
-              // Reload chainId in case the user changed it in Settings.
-              if (mounted) _loadChainId();
+              // Reload settings in case the user changed them.
+              if (mounted) _loadSettings();
             },
           ),
           if (auth.isAuthenticated)
@@ -131,7 +137,11 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         final signer = PrivySigner.fromWallet(auth.wallet!);
-        final service = AttestationService(signer: signer, chainId: _chainId);
+        final service = AttestationService(
+          signer: signer,
+          chainId: _chainId,
+          fallbackRpcUrl: _rpcUrl,
+        );
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => SignScreen(service: service)));
@@ -161,7 +171,11 @@ class _HomeScreenState extends State<HomeScreen> {
             return sig;
           },
         );
-        final service = AttestationService(signer: signer, chainId: _chainId);
+        final service = AttestationService(
+          signer: signer,
+          chainId: _chainId,
+          fallbackRpcUrl: _rpcUrl,
+        );
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => SignScreen(service: service)));
@@ -177,7 +191,11 @@ class _HomeScreenState extends State<HomeScreen> {
         final key = await showPrivateKeyImportDialog(context);
         if (key == null || !context.mounted) return;
         final signer = LocalKeySigner(privateKeyHex: key);
-        final service = AttestationService(signer: signer, chainId: _chainId);
+        final service = AttestationService(
+          signer: signer,
+          chainId: _chainId,
+          fallbackRpcUrl: _rpcUrl,
+        );
         if (context.mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => SignScreen(service: service)),
@@ -202,6 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final service = AttestationService(
           signer: dummySigner,
           chainId: _chainId,
+          fallbackRpcUrl: _rpcUrl,
         );
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => VerifyScreen(service: service)),
@@ -224,7 +243,11 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         final signer = PrivySigner.fromWallet(auth.wallet!);
-        final service = AttestationService(signer: signer, chainId: _chainId);
+        final service = AttestationService(
+          signer: signer,
+          chainId: _chainId,
+          fallbackRpcUrl: _rpcUrl,
+        );
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) =>
@@ -249,7 +272,11 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         final signer = PrivySigner.fromWallet(auth.wallet!);
-        final service = AttestationService(signer: signer, chainId: _chainId);
+        final service = AttestationService(
+          signer: signer,
+          chainId: _chainId,
+          fallbackRpcUrl: _rpcUrl,
+        );
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) =>
@@ -274,7 +301,11 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         final signer = PrivySigner.fromWallet(auth.wallet!);
-        final service = AttestationService(signer: signer, chainId: _chainId);
+        final service = AttestationService(
+          signer: signer,
+          chainId: _chainId,
+          fallbackRpcUrl: _rpcUrl,
+        );
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) =>

@@ -94,15 +94,29 @@ class PrivySigner extends Signer {
       remapped['primary_type'] = remapped.remove('primaryType');
     }
 
-    final sigHex = await _rpcCaller(
+    final sigHex = await rpcCall(
       'eth_signTypedData_v4',
-      [_address, jsonEncode(remapped)],
+      [_address, remapped],
     );
     try {
       return EIP712Signature.fromHex(sigHex);
     } catch (e) {
       throw FormatException('Invalid signature: $e');
     }
+  }
+
+  /// Performs a generic Ethereum JSON-RPC call.
+  ///
+  /// Useful for read-only operations like `eth_call` or `eth_getTransactionReceipt`.
+  ///
+  /// Note: Complex objects (Maps) in [params] are automatically JSON-encoded
+  /// to satisfy Privy's Android SDK requirements.
+  Future<String> rpcCall(String method, List<dynamic> params) {
+    final encodedParams = params.map((p) {
+      if (p is Map) return jsonEncode(p);
+      return p;
+    }).toList();
+    return _rpcCaller(method, encodedParams);
   }
 
   /// Wallet signers route exclusively through [signTypedData].

@@ -47,5 +47,37 @@ void main() {
       await service.clearPrivateKey();
       expect(service.privateKeyHex, '');
     });
+
+    test('generates correct Infura URL for Sepolia', () async {
+      final service = await SettingsService.create();
+      await service.setSelectedChainId(11155111);
+      await service.setInfuraApiKey('test-key');
+      expect(service.infuraRpcUrl, 'https://sepolia.infura.io/v3/test-key');
+    });
+
+    test('generates correct Infura URL for Optimism', () async {
+      final service = await SettingsService.create();
+      await service.setSelectedChainId(10);
+      await service.setInfuraApiKey('test-key');
+      expect(service.infuraRpcUrl, 'https://optimism-mainnet.infura.io/v3/test-key');
+    });
+
+    test('isInfuraSupported returns false for unsupported chains', () async {
+      final service = await SettingsService.create();
+      await service.setSelectedChainId(40); // Telos
+      expect(service.isInfuraSupported, isFalse);
+    });
+
+    test('rpcUrl prioritizes Infura over manual setting', () async {
+      final service = await SettingsService.create();
+      await service.setRpcUrl('https://manual.rpc');
+      await service.setInfuraApiKey('test-key');
+      await service.setSelectedChainId(11155111); // Sepolia
+      
+      expect(service.rpcUrl, 'https://sepolia.infura.io/v3/test-key');
+      
+      await service.setSelectedChainId(10); // Optimism
+      expect(service.rpcUrl, 'https://optimism-mainnet.infura.io/v3/test-key');
+    });
   });
 }

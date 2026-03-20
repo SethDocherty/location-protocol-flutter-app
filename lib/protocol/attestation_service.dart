@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
 import 'package:location_protocol/location_protocol.dart';
 
+import 'privy_signer.dart';
 import 'schema_config.dart';
 
 /// Orchestrates all protocol operations for the app.
@@ -12,13 +15,18 @@ import 'schema_config.dart';
 class AttestationService {
   final Signer signer;
   final int chainId;
+  final String? fallbackRpcUrl;
+  final http.Client? _httpClient;
   final String _easAddress;
   final OffchainSigner _offchainSigner;
 
   AttestationService({
     required this.signer,
     required this.chainId,
-  })  : _easAddress = ChainConfig.forChainId(chainId)!.eas,
+    this.fallbackRpcUrl,
+    http.Client? httpClient,
+  })  : _httpClient = httpClient,
+        _easAddress = ChainConfig.forChainId(chainId)!.eas,
         _offchainSigner = OffchainSigner(
           signer: signer,
           chainId: chainId,
@@ -102,4 +110,104 @@ class AttestationService {
   /// The Schema Registry contract address for the current chain.
   String get schemaRegistryAddress =>
       ChainConfig.forChainId(chainId)!.schemaRegistry;
+
+  /// Checks if the current app schema is registered on-chain.
+  Future<bool> isSchemaRegistered() async {
+    final uid = AppSchema.schemaUID.toLowerCase();
+    final record = await getSchemaRecord(uid);
+    if (record == null || record.length < 66) return false;
+
+    // In EAS, getSchema returns a `SchemaRecord` struct. Because this struct contains a dynamic 
+    // string, the entire return value is ABI-encoded as a dynamic type. This means the return data
+    // typically starts with a 32-byte offset (0x20) pointing to the actual struct data.
+    // The UID is the first 32 bytes of the struct data.
+    String returnedUid;
+    if (record.length >= 130 && record.startsWith('0x0000000000000000000000000000000000000000000000000000000000000020')) {
+      returnedUid = '0x${record.substring(66, 130)}'.toLowerCase();
+    } else {
+      // Fallback in case the record doesn't start with the expected offset
+      returnedUid = record.substring(0, 66).toLowerCase();
+    }
+    
+    return returnedUid == uid;
+  }
+
+  /// Fetches a raw schema record from the registry.
+  Future<String?> getSchemaRecord(String uid) async {
+    // getSchema(bytes32) selector: 0xa2ea7c6e (official EAS SchemaRegistry)
+    final callData = '0xa2ea7c6e${uid.replaceFirst('0x', '')}';
+
+    final result = await _rpcCall('eth_call', [
+      {'to': schemaRegistryAddress, 'data': callData},
+      'latest'
+    ]);
+    print('AttestationService: getSchemaRecord result: $result');
+    return result;
+  }
+
+  /// Fetches a transaction receipt.
+  Future<Map<String, dynamic>?> getTransactionReceipt(String txHash) async {
+    final result = await _rpcCall('eth_getTransactionReceipt', [txHash]);
+    // JSON-RPC returns null literal for missing receipt.
+    if (result == 'null' || result.isEmpty) return null;
+    return Map<String, dynamic>.from(jsonDecode(result));
+  }
+
+  /// Performs an RPC call, falling back to HTTP if the signer's provider fails.
+  Future<String> _rpcCall(String method, List<dynamic> params) async {
+    // 1. Try wallet signer first (if it supports generic RPC)
+    if (signer is PrivySigner) {
+      try {
+        final result = await (signer as PrivySigner).rpcCall(method, params);
+        return result;
+      } catch (e) {
+        print('AttestationService: Wallet RPC failed for $method: $e');
+        // Fall back to HTTP if method is unsupported or other wallet error
+        if (fallbackRpcUrl == null || fallbackRpcUrl!.isEmpty) {
+          print('AttestationService: No fallback RPC URL configured.');
+          throw UnsupportedError(
+            'Read-only checks (eth_call) are not supported by the current wallet. '
+            'Please configure an RPC URL in Settings to enable onchain status verification.',
+          );
+        }
+        print('AttestationService: Falling back to HTTP RPC: $fallbackRpcUrl');
+      }
+    }
+
+    // 2. Fallback to direct HTTP RPC
+    if (fallbackRpcUrl != null && fallbackRpcUrl!.isNotEmpty) {
+      final client = _httpClient ?? http.Client();
+      try {
+        final response = await client.post(
+          Uri.parse(fallbackRpcUrl!),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'jsonrpc': '2.0',
+            'id': DateTime.now().millisecondsSinceEpoch,
+            'method': method,
+            'params': params,
+          }),
+        );
+
+        if (response.statusCode != 200) {
+          throw Exception('Fallback RPC failed: ${response.statusCode}');
+        }
+
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data.containsKey('error')) {
+          throw Exception('RPC Error: ${data['error']['message']}');
+        }
+
+        final result = data['result'];
+        if (result == null) return 'null';
+        if (result is String) return result;
+        return jsonEncode(result);
+      } finally {
+        // Only close the client if we created it locally
+        if (_httpClient == null) client.close();
+      }
+    }
+
+    throw UnsupportedError('No RPC provider available for $method');
+  }
 }

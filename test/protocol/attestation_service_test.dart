@@ -1,8 +1,11 @@
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:location_protocol/location_protocol.dart';
 import 'package:location_protocol_flutter_app/protocol/attestation_service.dart';
+import 'package:location_protocol_flutter_app/protocol/privy_signer.dart';
 import 'package:location_protocol_flutter_app/protocol/schema_config.dart';
 
 const _testPrivateKey =
@@ -204,4 +207,147 @@ void main() {
       expect(service.schemaRegistryAddress, startsWith('0x'));
     });
   });
+
+  group('AttestationService — RPC checks', () {
+    late AttestationService rpcService;
+    late PrivySigner privySigner;
+    String? capturedMethod;
+
+    test('isSchemaRegistered returns true when UID is non-zero', () async {
+      privySigner = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (method, params) async {
+          capturedMethod = method;
+          // Return the real UID (first 32 bytes) to match strict check
+          return AppSchema.schemaUID;
+        },
+      );
+      rpcService = AttestationService(signer: privySigner, chainId: 1);
+
+      final result = await rpcService.isSchemaRegistered();
+      expect(result, isTrue);
+      expect(capturedMethod, 'eth_call');
+    });
+
+    test('isSchemaRegistered returns false when UID is zero', () async {
+      privySigner = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (method, params) async {
+          capturedMethod = method;
+          // Return zero UID
+          return '0x${'00' * 32}';
+        },
+      );
+      rpcService = AttestationService(signer: privySigner, chainId: 1);
+
+      final result = await rpcService.isSchemaRegistered();
+      expect(result, isFalse);
+    });
+
+    test('getTransactionReceipt returns decoded map', () async {
+      privySigner = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (method, params) async {
+          capturedMethod = method;
+          return '{"blockNumber": "0x1", "status": "0x1"}';
+        },
+      );
+      rpcService = AttestationService(signer: privySigner, chainId: 1);
+
+      final receipt = await rpcService.getTransactionReceipt('0x123');
+      expect(receipt, isA<Map<String, dynamic>>());
+      expect(receipt!['blockNumber'], '0x1');
+      expect(capturedMethod, 'eth_getTransactionReceipt');
+    });
+
+    test('getTransactionReceipt returns null for empty/null response', () async {
+      privySigner = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (method, params) async => 'null',
+      );
+      rpcService = AttestationService(signer: privySigner, chainId: 1);
+
+      final receipt = await rpcService.getTransactionReceipt('0x123');
+      expect(receipt, isNull);
+    });
+    test('isSchemaRegistered throws UnsupportedError if fallback missing', () async {
+      privySigner = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (method, params) async => throw Exception('Unsupported'),
+      );
+      rpcService = AttestationService(signer: privySigner, chainId: 1);
+
+      expect(
+        rpcService.isSchemaRegistered(),
+        throwsA(isA<UnsupportedError>().having(
+          (e) => e.message,
+          'message',
+          contains('Please configure an RPC URL in Settings'),
+        )),
+      );
+    });
+  });
+
+  group('AttestationService — HTTP Fallback', () {
+    test('falls back to HTTP when signer throws Unsupported method', () async {
+      final privySigner = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (method, params) async =>
+            throw Exception('Unsupported method: eth_call'),
+      );
+
+      final fakeClient = FakeClient((request) async {
+        return http.Response(
+          '{"jsonrpc":"2.0","id":1,"result":"${AppSchema.schemaUID}"}',
+          200,
+        );
+      });
+
+      final service = AttestationService(
+        signer: privySigner,
+        chainId: 1,
+        fallbackRpcUrl: 'https://fallback.rpc',
+        httpClient: fakeClient,
+      );
+
+      final result = await service.isSchemaRegistered();
+      expect(result, isTrue);
+    });
+
+    test('bubbles up HTTP errors from fallback', () async {
+      final privySigner = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (method, params) async =>
+            throw Exception('Unsupported method'),
+      );
+
+      final fakeClient = FakeClient((request) async {
+        return http.Response('Internal Server Error', 500);
+      });
+
+      final service = AttestationService(
+        signer: privySigner,
+        chainId: 1,
+        fallbackRpcUrl: 'https://fallback.rpc',
+        httpClient: fakeClient,
+      );
+
+      expect(service.isSchemaRegistered(), throwsA(isA<Exception>()));
+    });
+  });
+}
+
+class FakeClient extends http.BaseClient {
+  final Future<http.Response> Function(http.BaseRequest request) handler;
+  FakeClient(this.handler);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final resp = await handler(request);
+    return http.StreamedResponse(
+      Stream.value(resp.bodyBytes),
+      resp.statusCode,
+      headers: resp.headers,
+    );
+  }
 }

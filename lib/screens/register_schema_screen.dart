@@ -23,14 +23,39 @@ class RegisterSchemaScreen extends StatefulWidget {
 }
 
 class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
+  bool _checking = true;
+  bool _isRegistered = false;
   bool _submitting = false;
   String? _txHash;
+  Map<String, dynamic>? _receipt;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+  }
+
+  Future<void> _checkStatus() async {
+    setState(() {
+      _checking = true;
+      _error = null;
+    });
+    try {
+      final exists = await widget.service.isSchemaRegistered();
+      if (mounted) setState(() => _isRegistered = exists);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Status check failed: $e');
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
 
   Future<void> _register() async {
     setState(() {
       _submitting = true;
       _txHash = null;
+      _receipt = null;
       _error = null;
     });
 
@@ -42,7 +67,10 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
       );
 
       final result = await widget.wallet.provider.request(
-        EthereumRpcRequest(method: 'eth_sendTransaction', params: [jsonEncode(txRequest)]),
+        EthereumRpcRequest(
+          method: 'eth_sendTransaction',
+          params: [jsonEncode(txRequest)],
+        ),
       );
 
       late String txHash;
@@ -52,10 +80,26 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
       );
 
       if (mounted) setState(() => _txHash = txHash);
+
+      // Wait for receipt to provide a premium experience
+      _waitForReceipt(txHash);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _waitForReceipt(String txHash) async {
+    // Poll for receipt (simple version for this demo/task)
+    for (int i = 0; i < 10; i++) {
+      await Future.delayed(const Duration(seconds: 2));
+      final receipt = await widget.service.getTransactionReceipt(txHash);
+      if (receipt != null) {
+        if (mounted) setState(() => _receipt = receipt);
+        _checkStatus(); // Confirm registration status
+        break;
+      }
     }
   }
 
@@ -64,12 +108,47 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
     final schemaString = AppSchema.definition.toEASSchemaString();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Register Schema')),
+      appBar: AppBar(
+        title: const Text('Register Schema'),
+        actions: [
+          if (!_checking)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _checkStatus,
+            ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_checking) ...[
+              const LinearProgressIndicator(),
+              const SizedBox(height: 16),
+              const Center(child: Text('Checking onchain status...')),
+            ] else if (_isRegistered) ...[
+              Card(
+                color: Colors.blue.withValues(alpha: 0.1),
+                child: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.blue),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'This schema is already registered onchain. '
+                          'No further action required.',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             Text(
               'Schema String',
               style: Theme.of(context).textTheme.titleSmall,
@@ -110,15 +189,22 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
               style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
             ),
             const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _submitting ? null : _register,
-              child: _submitting
+            FilledButton.icon(
+              onPressed:
+                  (_submitting || _checking || _isRegistered) ? null : _register,
+              icon: _submitting
                   ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
-                  : const Text('Register Schema Onchain'),
+                  : const Icon(Icons.cloud_upload),
+              label: Text(
+                _isRegistered ? 'Already Registered' : 'Register Schema Onchain',
+              ),
             ),
             if (_error != null) ...[
               const SizedBox(height: 16),
@@ -126,7 +212,12 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
                 color: Theme.of(context).colorScheme.errorContainer,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(_error!),
+                  child: Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -139,18 +230,36 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Schema Registration Submitted',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      Text(
+                        _receipt != null
+                            ? '✅ Registration Confirmed'
+                            : '⏳ Transaction Submitted',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       SelectableText(
-                        'TX Hash: $_txHash',
+                        'TX: $_txHash',
                         style: const TextStyle(
                           fontFamily: 'monospace',
-                          fontSize: 12,
+                          fontSize: 10,
                         ),
                       ),
+                      if (_receipt != null) ...[
+                        const Divider(height: 24),
+                        _receiptRow('Block', _receipt!['blockNumber']),
+                        _receiptRow('Status', _receipt!['status']),
+                        _receiptRow('Gas Used', _receipt!['gasUsed']),
+                      ] else
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            'Waiting for receipt...',
+                            style: TextStyle(
+                              fontStyle: FontStyle.italic,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -158,6 +267,20 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _receiptRow(String label, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          Text('$value',
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+        ],
       ),
     );
   }

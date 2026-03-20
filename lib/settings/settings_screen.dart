@@ -17,6 +17,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _rpcController = TextEditingController();
   final _keyController = TextEditingController();
+  final _infuraKeyController = TextEditingController();
   int _chainId = 11155111;
   bool _loading = true;
   SettingsService? _service;
@@ -33,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _service = service;
       _rpcController.text = service.rpcUrl;
+      _infuraKeyController.text = service.infuraApiKey;
       _keyController.text = service.privateKeyHex;
       _chainId = service.selectedChainId;
       _loading = false;
@@ -43,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_service == null) return;
     await _service!.setRpcUrl(_rpcController.text.trim());
     await _service!.setSelectedChainId(_chainId);
+    await _service!.setInfuraApiKey(_infuraKeyController.text.trim());
     final key = _keyController.text.trim();
     if (key.isNotEmpty) {
       await _service!.setPrivateKeyHex(key);
@@ -61,6 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _keyController.clear(); // Clear sensitive data
     _rpcController.dispose();
     _keyController.dispose();
+    _infuraKeyController.dispose();
     super.dispose();
   }
 
@@ -81,9 +85,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'These settings are used for the private-key onchain path '
-                    'and for connecting to an RPC node. Not required for '
-                    'Privy-wallet operations.',
+                    'The RPC URL is used for onchain status checks and '
+                    'transaction verification. This is required for schema '
+                    'registration checks if your wallet provider (like Privy) '
+                    'does not support read-only eth_call methods.',
                     style: TextStyle(color: Colors.grey),
                   ),
                   const SizedBox(height: 24),
@@ -93,11 +98,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   TextField(
+                    controller: _infuraKeyController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: 'Infura API Key',
+                      hintText: 'Enter your Infura API Key...',
+                      border: const OutlineInputBorder(),
+                      enabled: SettingsService.isChainSupported(_chainId),
+                      helperText: SettingsService.isChainSupported(_chainId)
+                          ? 'Automates RPC URL for supported networks'
+                          : 'Not supported for this network',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (SettingsService.getInfuraUrl(
+                        _chainId,
+                        _infuraKeyController.text.trim(),
+                      ) !=
+                      null) ...[
+                    const Text(
+                      'RPC Managed by Infura',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  TextField(
                     controller: _rpcController,
-                    decoration: const InputDecoration(
+                    enabled: SettingsService.getInfuraUrl(
+                          _chainId,
+                          _infuraKeyController.text.trim(),
+                        ) ==
+                        null,
+                    decoration: InputDecoration(
                       labelText: 'RPC URL',
-                      hintText: 'https://eth-sepolia.g.alchemy.com/v2/...',
-                      border: OutlineInputBorder(),
+                      hintText: SettingsService.getInfuraUrl(
+                            _chainId,
+                            _infuraKeyController.text.trim(),
+                          ) ??
+                          'https://eth-sepolia.g.alchemy.com/v2/...',
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 16),

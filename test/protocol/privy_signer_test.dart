@@ -214,6 +214,21 @@ void main() {
       // Actual invocation requires a real EmbeddedEthereumWallet.
       expect(PrivySigner.fromWallet, isA<Function>());
     });
+
+    test('rpcCall forwards requests to the underlying rpcCaller', () async {
+      String? capturedMethod;
+      final signer = PrivySigner(
+        walletAddress: _testAddress,
+        rpcCaller: (method, _) async {
+          capturedMethod = method;
+          return '0xabc';
+        },
+      );
+
+      final result = await signer.rpcCall('eth_test', []);
+      expect(capturedMethod, 'eth_test');
+      expect(result, '0xabc');
+    });
   });
 
   group('PrivySigner — E2E sign + verify via library', () {

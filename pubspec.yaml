@@ -19,6 +19,7 @@ dependencies:
   location_protocol:
     git:
       url: https://github.com/DecentralizedGeo/location-protocol-dart.git
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
