@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.location_protocol_flutter_app"
-        minSdk 21
+        minSdk 27
         targetSdk flutter.targetSdkVersion
         versionCode flutter.versionCode
         versionName flutter.versionName
