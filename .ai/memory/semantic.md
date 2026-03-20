@@ -6,3 +6,7 @@
 - `LocalKeySigner` preserves deterministic local signing for tests and compatibility.
 - `PrivyWalletSigner` signs digest via embedded wallet provider RPC and returns `MsgSignature`.
 - `EIP712Signer.signLocationAttestationWith(...)` is the async abstraction entrypoint; existing sync method remains intact.
+- `AttestationService` acts as the exclusive on/offchain bridge and protocol coordinator over the library APIs.
+- `AppSchema` fully insulates the application logic from raw UID generation and EAS payload structures.
+- `PrivySigner` connects embedded wallets to the library via `EthereumRpcCaller` callback injections.
+- `ExternalWalletSigner` routes external signature generation (MetaMask, etc.) through application callbacks back into the structured library types.
