@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'screens/home_screen.dart';
-import 'src/privy_auth_modal/privy_auth_modal.dart';
+import 'privy/privy_module.dart';
 import 'src/services/location_protocol_provider.dart';
 
 Future<void> main() async {

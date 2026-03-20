@@ -1,6 +1,6 @@
 /// Internal singleton that manages the Privy SDK lifecycle.
 ///
-/// This is internal to the privy_auth_modal module — not exported
+/// This is internal to the privy module — not exported
 /// through the barrel file. Consumers interact via [PrivyAuthProvider].
 library;
 

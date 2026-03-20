@@ -25,7 +25,7 @@
 ///   print(auth.wallet?.address);
 /// }
 /// ```
-library privy_auth_modal;
+library privy_module;
 
 export 'login_modal.dart' show showPrivyLoginModal;
 export 'privy_auth_config.dart'
