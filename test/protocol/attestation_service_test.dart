@@ -286,6 +286,60 @@ void main() {
         )),
       );
     });
+    test('waitForAttestationUid polls and returns uid', () async {
+      int pollCount = 0;
+      privySigner = PrivySigner(
+        walletAddress: '0x123',
+        rpcCaller: (method, params) async {
+          if (method == 'eth_getTransactionReceipt') {
+            pollCount++;
+            if (pollCount < 2) return 'null';
+            // Return receipt on second poll, returning the UID in data
+            return '''
+            {
+              "logs": [
+                {
+                  "address": "${rpcService.easAddress}",
+                  "data": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+                }
+              ]
+            }
+            ''';
+          }
+          return 'null';
+        },
+      );
+      rpcService = AttestationService(signer: privySigner, chainId: 11155111);
+
+      final uid = await rpcService.waitForAttestationUid(
+        '0xtx',
+        pollInterval: const Duration(milliseconds: 1), // Fast for tests
+      );
+
+      expect(pollCount, 2);
+      expect(uid, '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef');
+    });
+
+    test('waitForAttestationUid throws if no logs match', () async {
+      privySigner = PrivySigner(
+        walletAddress: '0x123',
+        rpcCaller: (method, params) async {
+          if (method == 'eth_getTransactionReceipt') {
+            return '{"logs": []}';
+          }
+          return 'null';
+        },
+      );
+      rpcService = AttestationService(signer: privySigner, chainId: 11155111);
+
+      expect(
+        () => rpcService.waitForAttestationUid(
+          '0xtx',
+          pollInterval: const Duration(milliseconds: 1),
+        ),
+        throwsException,
+      );
+    });
   });
 
   group('AttestationService — HTTP Fallback', () {

@@ -153,6 +153,35 @@ class AttestationService {
     return Map<String, dynamic>.from(jsonDecode(result));
   }
 
+  /// Polls for a transaction receipt and extracts the EAS Attestation UID.
+  Future<String> waitForAttestationUid(
+    String txHash, {
+    int maxRetries = 15,
+    Duration pollInterval = const Duration(seconds: 2),
+  }) async {
+    for (int i = 0; i < maxRetries; i++) {
+        final receipt = await getTransactionReceipt(txHash);
+        if (receipt != null) {
+            final logs = receipt['logs'] as List<dynamic>?;
+            if (logs != null) {
+              for (final logRaw in logs) {
+                final log = logRaw as Map<String, dynamic>;
+                final address = log['address'] as String?;
+                if (address != null && address.toLowerCase() == _easAddress.toLowerCase()) {
+                  final data = log['data'] as String?;
+                  if (data != null && data.length >= 66) {
+                    return data.substring(0, 66);
+                  }
+                }
+              }
+            }
+            throw Exception('Transaction mined but no Attested event found.');
+        }
+        await Future.delayed(pollInterval);
+    }
+    throw Exception('Timeout waiting for transaction receipt.');
+  }
+
   /// Performs an RPC call, falling back to HTTP if the signer's provider fails.
   Future<String> _rpcCall(String method, List<dynamic> params) async {
     // 1. Try wallet signer first (if it supports generic RPC)
