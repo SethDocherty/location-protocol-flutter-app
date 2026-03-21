@@ -195,6 +195,22 @@ void main() {
       expect(txRequest['from'], _testAddress);
       // Privy Android SDK requires chainId as 0x-prefixed hex.
       expect(txRequest['chainId'], '0xaa36a7'); // 11155111 in hex
+      expect(txRequest.containsKey('sponsor'), isFalse);
+    });
+
+    test('buildTxRequest includes sponsor flag when sponsorGas is true', () {
+      final sponsorService = AttestationService(
+        signer: signer,
+        chainId: 11155111,
+        sponsorGas: true,
+      );
+
+      final txRequest = sponsorService.buildTxRequest(
+        callData: Uint8List.fromList([1, 2, 3]),
+        contractAddress: '0x123',
+      );
+
+      expect(txRequest['sponsor'], isTrue);
     });
 
     test('easAddress is non-empty for Sepolia', () {

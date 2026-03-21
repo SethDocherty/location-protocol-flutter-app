@@ -19,11 +19,13 @@ class AttestationService {
   final http.Client? _httpClient;
   final String _easAddress;
   final OffchainSigner _offchainSigner;
+  final bool sponsorGas;
 
   AttestationService({
     required this.signer,
     required this.chainId,
     this.fallbackRpcUrl,
+    this.sponsorGas = false,
     http.Client? httpClient,
   })  : _httpClient = httpClient,
         _easAddress = ChainConfig.forChainId(chainId)!.eas,
@@ -101,7 +103,11 @@ class AttestationService {
       from: signer.address,
     );
     // Privy Android SDK requires chainId in the tx object (EIP-155).
-    return {...tx, 'chainId': '0x${chainId.toRadixString(16)}'};
+    final enhancedTx = {...tx, 'chainId': '0x${chainId.toRadixString(16)}'};
+    if (sponsorGas) {
+      enhancedTx['sponsor'] = true;
+    }
+    return enhancedTx;
   }
 
   /// The EAS contract address for the current chain.
