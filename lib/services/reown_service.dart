@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:reown_appkit/reown_appkit.dart';
 import 'package:location_protocol/location_protocol.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'dart:convert';
 
 class ReownService {
   late ReownAppKitModal appKitModal;
@@ -44,6 +43,15 @@ class ReownService {
     return appKitModal.session!.getAddress('eip155');
   }
 
+  String get currentAddress {
+    return appKitModal.session!.getAddress('eip155') ?? '';
+  }
+
+  String get currentChainId {
+    final chainIdStr = appKitModal.selectedChain?.chainId ?? 'eip155:11155111';
+    return chainIdStr.split(':').last;
+  }
+
   Future<String> personalSign(BuildContext context, String message) async {
     if (!appKitModal.isConnected) {
       await appKitModal.openModalView(); 
@@ -56,15 +64,12 @@ class ReownService {
     final sessionTopic = appKitModal.session!.topic ?? '';
     final address = appKitModal.session!.getAddress('eip155') ?? '';
     
-    final messageBytes = utf8.encode(message);
-    final messageHex = '0x${messageBytes.map((e) => e.toRadixString(16).padLeft(2, '0')).join()}';
-
     final response = await appKitModal.request(
       topic: sessionTopic,
       chainId: appKitModal.selectedChain?.chainId ?? 'eip155:11155111',
       request: SessionRequestParams(
         method: 'personal_sign',
-        params: [messageHex, address],
+        params: [message, address],
       ),
     );
     
