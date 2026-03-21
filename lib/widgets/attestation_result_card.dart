@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:location_protocol/location_protocol.dart';
 
 /// Displays the result of a signed offchain attestation.
@@ -77,20 +79,36 @@ class AttestationResultCard extends StatelessWidget {
   }
 
   void _copyToClipboard(BuildContext context) {
-    final text =
-        '''UID: ${attestation.uid}
-Signer: ${attestation.signer}
-Schema UID: ${attestation.schemaUID}
-Time: ${attestation.time}
-Version: ${attestation.version}
-Salt: ${attestation.salt}
-Signature v: ${attestation.signature.v}
-Signature r: ${attestation.signature.r}
-Signature s: ${attestation.signature.s}''';
+    // Generate hex representation of Uint8List data
+    final dataHex = '0x${attestation.data.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+
+    // Build the map matching what VerifyScreen._parseAttestation expects
+    final map = {
+      'uid': attestation.uid,
+      'schemaUID': attestation.schemaUID,
+      'recipient': attestation.recipient,
+      'time': attestation.time.toInt(),
+      'expirationTime': attestation.expirationTime.toInt(),
+      'revocable': attestation.revocable,
+      'refUID': attestation.refUID,
+      'data': dataHex,
+      'salt': attestation.salt,
+      'version': attestation.version,
+      'signature': {
+        'v': attestation.signature.v,
+        'r': attestation.signature.r,
+        's': attestation.signature.s,
+      },
+      'signer': attestation.signer,
+    };
+
+    // Format as pretty-printed JSON
+    final text = const JsonEncoder.withIndent('  ').convert(map);
 
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Attestation copied to clipboard as JSON')),
+    );
   }
 }
+
