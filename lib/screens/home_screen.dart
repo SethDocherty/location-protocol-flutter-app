@@ -3,6 +3,8 @@ import 'package:location_protocol/location_protocol.dart';
 
 import '../privy/privy_module.dart';
 import '../protocol/protocol_module.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import '../widgets/private_key_import_dialog.dart';
 import '../widgets/external_sign_dialog.dart';
 import 'sign_screen.dart';
@@ -139,10 +141,12 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         final signer = PrivySigner.fromWallet(auth.wallet!);
+        final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
           chainId: _chainId,
           fallbackRpcUrl: _rpcUrl,
+          sponsorGas: isSponsored,
         );
         Navigator.of(
           context,
@@ -173,10 +177,12 @@ class _HomeScreenState extends State<HomeScreen> {
             return sig;
           },
         );
+        final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
           chainId: _chainId,
           fallbackRpcUrl: _rpcUrl,
+          sponsorGas: isSponsored,
         );
         Navigator.of(
           context,
@@ -240,10 +246,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _launchSignScreen(String privateKeyHex) {
     final signer = LocalKeySigner(privateKeyHex: privateKeyHex);
+    final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
     final service = AttestationService(
       signer: signer,
       chainId: _chainId,
       fallbackRpcUrl: _rpcUrl,
+      sponsorGas: isSponsored,
     );
 
     if (mounted) {
@@ -265,10 +273,12 @@ class _HomeScreenState extends State<HomeScreen> {
           privateKeyHex:
               'ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
         );
+        final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: dummySigner,
           chainId: _chainId,
           fallbackRpcUrl: _rpcUrl,
+          sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => VerifyScreen(service: service)),
@@ -291,10 +301,12 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         final signer = PrivySigner.fromWallet(auth.wallet!);
+        final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
           chainId: _chainId,
           fallbackRpcUrl: _rpcUrl,
+          sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -320,10 +332,12 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         final signer = PrivySigner.fromWallet(auth.wallet!);
+        final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
           chainId: _chainId,
           fallbackRpcUrl: _rpcUrl,
+          sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -349,10 +363,12 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         final signer = PrivySigner.fromWallet(auth.wallet!);
+        final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
           chainId: _chainId,
           fallbackRpcUrl: _rpcUrl,
+          sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
           MaterialPageRoute(
