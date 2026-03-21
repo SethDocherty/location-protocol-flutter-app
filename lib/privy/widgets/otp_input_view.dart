@@ -5,6 +5,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Callback signatures for OTP operations.
 typedef SendCodeCallback = Future<bool> Function(String identifier);
@@ -32,6 +33,12 @@ class OtpInputView extends StatefulWidget {
   /// Called when the user taps the back arrow.
   final VoidCallback onBack;
 
+  /// Optional input formatters for the identifier field.
+  final List<TextInputFormatter>? identifierInputFormatters;
+
+  /// Optional initial value for the identifier field.
+  final String? initialIdentifier;
+
   const OtpInputView({
     super.key,
     required this.identifierLabel,
@@ -40,6 +47,8 @@ class OtpInputView extends StatefulWidget {
     required this.onSendCode,
     required this.onVerifyCode,
     required this.onBack,
+    this.identifierInputFormatters,
+    this.initialIdentifier,
   });
 
   @override
@@ -52,6 +61,14 @@ class _OtpInputViewState extends State<OtpInputView> {
   bool _codeSent = false;
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialIdentifier != null) {
+      _identifierController.text = widget.initialIdentifier!;
+    }
+  }
 
   @override
   void dispose() {
@@ -160,6 +177,7 @@ class _OtpInputViewState extends State<OtpInputView> {
             border: const OutlineInputBorder(),
           ),
           keyboardType: widget.identifierKeyboardType,
+          inputFormatters: widget.identifierInputFormatters,
           autocorrect: false,
           enabled: !_codeSent || !_loading,
         ),
