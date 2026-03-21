@@ -6,7 +6,6 @@ import '../protocol/protocol_module.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../widgets/private_key_import_dialog.dart';
-import '../widgets/external_sign_dialog.dart';
 import 'sign_screen.dart';
 import 'verify_screen.dart';
 import 'onchain_attest_screen.dart';
@@ -14,6 +13,7 @@ import 'register_schema_screen.dart';
 import 'timestamp_screen.dart';
 import '../settings/settings_screen.dart';
 import '../settings/settings_service.dart';
+import '../services/reown_service.dart';
 
 /// Main screen — auth-gated navigation hub for all attestation operations.
 class HomeScreen extends StatefulWidget {
@@ -27,11 +27,13 @@ class _HomeScreenState extends State<HomeScreen> {
   int _chainId = 11155111; // default until settings load
   String? _rpcUrl;
   String? _privateKeyHex;
+  final ReownService _reownService = ReownService();
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _reownService.initialize(context);
   }
 
   Future<void> _loadSettings() async {
@@ -162,19 +164,21 @@ class _HomeScreenState extends State<HomeScreen> {
     return _ActionButton(
       icon: Icons.account_balance_wallet_outlined,
       label: 'Sign with External Wallet',
-      onPressed: () {
-        if (auth.walletAddress == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No wallet address available')),
-          );
+      onPressed: () async {
+        final address = await _reownService.connectAndGetAddress();
+        if (address == null || address.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('External wallet connection failed or cancelled')),
+            );
+          }
           return;
         }
+
         final signer = ExternalWalletSigner(
-          walletAddress: auth.walletAddress!,
+          walletAddress: address,
           onSignTypedData: (typedData) async {
-            final sig = await showExternalSignDialog(context, typedData);
-            if (sig == null) throw Exception('Signing cancelled');
-            return sig;
+            return await _reownService.signTypedData(context, typedData);
           },
         );
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
@@ -184,9 +188,12 @@ class _HomeScreenState extends State<HomeScreen> {
           fallbackRpcUrl: _rpcUrl,
           sponsorGas: isSponsored,
         );
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => SignScreen(service: service)));
+        
+        if (context.mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => SignScreen(service: service))
+          );
+        }
       },
     );
   }
