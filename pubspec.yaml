@@ -21,7 +21,6 @@ dependencies:
       url: https://github.com/DecentralizedGeo/location-protocol-dart.git
   http: ^1.6.0
   reown_appkit: ^1.8.3
-  blockchain_utils: ^6.0.0
 
 dev_dependencies:
   flutter_test:
