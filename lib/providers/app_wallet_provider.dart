@@ -33,7 +33,11 @@ class AppWalletProvider extends ChangeNotifier {
   }
 
   ConnectionType get connectionType {
-    if (_privyAuth?.isAuthenticated == true) return ConnectionType.privy;
+    if (_privyAuth?.isAuthenticated == true) {
+      if (_privyAuth?.wallet != null) return ConnectionType.privy;
+      // SIWE login has no embedded wallet, so it operates externally.
+      return ConnectionType.external;
+    }
     if (_externalAddress != null) return ConnectionType.external;
     if (_privateKeyHex != null) return ConnectionType.privateKey;
     return ConnectionType.none;
@@ -50,7 +54,7 @@ class AppWalletProvider extends ChangeNotifier {
       case ConnectionType.privy:
         return _privyAuth?.walletAddress;
       case ConnectionType.external:
-        return _externalAddress;
+        return _externalAddress ?? _privyAuth?.walletAddress;
       case ConnectionType.privateKey:
         if (_privateKeyHex != null) {
           return LocalKeySigner(privateKeyHex: _privateKeyHex!).address;
@@ -100,11 +104,12 @@ class AppWalletProvider extends ChangeNotifier {
         }
         return null;
       case ConnectionType.external:
-        if (_externalAddress != null && _reownService != null) {
+        final address = _externalAddress ?? _privyAuth?.walletAddress;
+        if (address != null && _reownService != null) {
           return ExternalWalletSigner(
-            walletAddress: _externalAddress!,
+            walletAddress: address,
             onSignTypedData: (typedData) async {
-              return await _reownService.signTypedData(context, typedData);
+              return await _reownService!.signTypedData(context, typedData);
             },
           );
         }

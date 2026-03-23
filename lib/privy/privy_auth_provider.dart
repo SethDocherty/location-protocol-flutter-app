@@ -134,9 +134,11 @@ class PrivyAuthProvider extends StatefulWidget {
   });
 
   /// Retrieve the nearest [PrivyAuthState] from the widget tree.
-  static PrivyAuthState of(BuildContext context) {
-    final provider =
-        context.dependOnInheritedWidgetOfExactType<_PrivyAuthInherited>();
+  static PrivyAuthState of(BuildContext context, {bool listen = true}) {
+    final _PrivyAuthInherited? provider = listen
+        ? context.dependOnInheritedWidgetOfExactType<_PrivyAuthInherited>()
+        : context.getElementForInheritedWidgetOfExactType<_PrivyAuthInherited>()
+                ?.widget as _PrivyAuthInherited?;
     if (provider == null) {
       throw FlutterError(
         'PrivyAuthProvider.of() called without a PrivyAuthProvider ancestor.\n'

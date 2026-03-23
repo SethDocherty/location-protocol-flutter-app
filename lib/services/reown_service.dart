@@ -64,6 +64,8 @@ class ReownService {
     final sessionTopic = appKitModal.session!.topic ?? '';
     final address = appKitModal.session!.getAddress('eip155') ?? '';
     
+    appKitModal.launchConnectedWallet();
+    
     final response = await appKitModal.request(
       topic: sessionTopic,
       chainId: appKitModal.selectedChain?.chainId ?? 'eip155:11155111',
@@ -92,6 +94,8 @@ class ReownService {
     final sessionTopic = appKitModal.session!.topic ?? '';
     final address = appKitModal.session!.getAddress('eip155') ?? '';
 
+    appKitModal.launchConnectedWallet();
+
     final response = await appKitModal.request(
       topic: sessionTopic,
       chainId: appKitModal.selectedChain?.chainId ?? 'eip155:11155111',
@@ -119,6 +123,8 @@ class ReownService {
 
     final sessionTopic = appKitModal.session!.topic ?? '';
     final chainId = appKitModal.selectedChain?.chainId ?? 'eip155:11155111';
+
+    appKitModal.launchConnectedWallet();
 
     final response = await appKitModal.request(
       topic: sessionTopic,

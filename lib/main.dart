@@ -40,7 +40,7 @@ class LocationProtocolApp extends StatelessWidget {
               Provider<ReownService>(create: (_) => ReownService()),
               ChangeNotifierProvider<AppWalletProvider>(
                 create: (context) => AppWalletProvider(
-                  privyAuth: PrivyAuthProvider.of(context),
+                  privyAuth: PrivyAuthProvider.of(context, listen: false),
                   reownService: context.read<ReownService>(),
                 ),
               ),

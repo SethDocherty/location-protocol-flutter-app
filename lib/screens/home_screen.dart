@@ -137,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
 
-        final signer = walletProvider.getSigner(_chainId);
+        final signer = walletProvider.getSigner(context, _chainId);
         if (signer == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Could not initialize signer')),
@@ -192,7 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
       icon: Icons.cloud_upload,
       label: 'Attest Onchain',
       onPressed: () {
-        final signer = walletProvider.getSigner(_chainId);
+        final signer = walletProvider.getSigner(context, _chainId);
         if (signer == null) return;
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
@@ -215,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> {
       icon: Icons.app_registration,
       label: 'Register Schema',
       onPressed: () {
-        final signer = walletProvider.getSigner(_chainId);
+        final signer = walletProvider.getSigner(context, _chainId);
         if (signer == null) return;
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
@@ -238,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
       icon: Icons.access_time,
       label: 'Timestamp Offchain UID',
       onPressed: () {
-        final signer = walletProvider.getSigner(_chainId);
+        final signer = walletProvider.getSigner(context, _chainId);
         if (signer == null) return;
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
