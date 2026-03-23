@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -169,7 +170,7 @@ class AttestationService {
       {'to': schemaRegistryAddress, 'data': callData},
       'latest'
     ]);
-    print('AttestationService: getSchemaRecord result: $result');
+    developer.log('AttestationService: getSchemaRecord result: $result');
     return result;
   }
 
@@ -218,16 +219,16 @@ class AttestationService {
         final result = await (signer as PrivySigner).rpcCall(method, params);
         return result;
       } catch (e) {
-        print('AttestationService: Wallet RPC failed for $method: $e');
+        developer.log('AttestationService: Wallet RPC failed for $method: $e');
         // Fall back to HTTP if method is unsupported or other wallet error
         if (fallbackRpcUrl == null || fallbackRpcUrl!.isEmpty) {
-          print('AttestationService: No fallback RPC URL configured.');
+          developer.log('AttestationService: No fallback RPC URL configured.');
           throw UnsupportedError(
             'Read-only checks (eth_call) are not supported by the current wallet. '
             'Please configure an RPC URL in Settings to enable onchain status verification.',
           );
         }
-        print('AttestationService: Falling back to HTTP RPC: $fallbackRpcUrl');
+        developer.log('AttestationService: Falling back to HTTP RPC: $fallbackRpcUrl');
       }
     }
 
