@@ -8,8 +8,8 @@ void main() {
   ) async {
     await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
 
-    // HomeScreen calls PrivyAuthProvider.of(context), which throws if
-    // there's no ancestor PrivyAuthProvider.
-    expect(tester.takeException(), isA<FlutterError>());
+    // HomeScreen calls context.watch<AppWalletProvider>(), which throws if
+    // there's no ancestor Provider.
+    expect(tester.takeException(), isNotNull);
   });
 }

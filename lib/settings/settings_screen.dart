@@ -5,8 +5,7 @@ import 'settings_service.dart';
 
 /// Settings screen for dev/test configuration.
 ///
-/// Allows configuring: RPC URL, chain ID, and a private key for
-/// the private-key onchain path.
+/// Allows configuring: RPC URL and chain ID.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
