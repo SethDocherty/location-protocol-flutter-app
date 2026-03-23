@@ -5,3 +5,5 @@
 - Run targeted red-green tests first for new abstraction methods before full-suite regression.
 - For auth-gated UI tests, prefer explicit provider-boundary assertions in smoke tests unless mocking the provider.
 - Always enforce the `verification-before-completion` Iron Law strictly manually running verification commands *before* checking off lists or making success assertions. Do not substitute newly drafted test cases if the original plan provided explicit test blocks.
+- When a widget loads `SettingsService.create()` from `initState`, set `SharedPreferences.setMockInitialValues({})` in widget tests to avoid hangs during `pumpAndSettle`.
+- Gate onchain buttons by `AppWalletProvider.canSendTransactions` rather than `ConnectionType.privy` so external wallets can use the same runtime path.
