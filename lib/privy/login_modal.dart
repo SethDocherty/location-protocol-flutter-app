@@ -21,6 +21,7 @@ import 'widgets/login_method_button.dart';
 import '../providers/app_wallet_provider.dart';
 import '../widgets/private_key_import_dialog.dart';
 import 'package:provider/provider.dart';
+import '../services/reown_service.dart';
 
 /// Opens the Privy login modal as a bottom sheet.
 ///
@@ -173,6 +174,17 @@ class _LoginModalRootState extends State<_LoginModalRoot> {
             onTap: () => _onMethodSelected(method),
           ),
         const SizedBox(height: 12),
+        _ExternalWalletButton(
+          onPressed: () async {
+            final walletProvider = context.read<AppWalletProvider>();
+            await walletProvider.connectExternal(context);
+            if (!mounted) return;
+            if (walletProvider.connectionType == ConnectionType.external) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: () async {
             final key = await showPrivateKeyImportDialog(context);
@@ -221,7 +233,45 @@ class _LoginModalRootState extends State<_LoginModalRoot> {
         }
         _goTo(_ModalPage.oauth, oauthMethod: method);
       case LoginMethod.siwe:
-        _goTo(_ModalPage.siwe);
+        widget.config.onError?.call('Connect Wallet via SIWE is no longer available in the runtime login modal.');
     }
+  }
+}
+
+class _ExternalWalletButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+
+  const _ExternalWalletButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final reownService = context.read<ReownService>();
+    final available = reownService.isAvailable;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          key: const ValueKey('connect-external-wallet'),
+          onPressed: available ? onPressed : null,
+          icon: const Icon(Icons.link),
+          label: const Text('Connect External Wallet'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            alignment: Alignment.center,
+          ),
+        ),
+        if (!available) ...[
+          const SizedBox(height: 8),
+          Text(
+            'External wallet login is unavailable because REOWN_PROJECT_ID is missing.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ],
+    );
   }
 }

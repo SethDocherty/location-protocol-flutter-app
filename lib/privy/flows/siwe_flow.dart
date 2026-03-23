@@ -5,7 +5,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:privy_flutter/privy_flutter.dart';
-import 'package:on_chain/on_chain.dart';
 import '../privy_auth_config.dart';
 import '../privy_manager.dart';
 import '../../services/reown_service.dart';
@@ -61,9 +60,7 @@ class _SiweFlowState extends State<SiweFlow> {
         return;
       }
       
-      // EIP-4361 strictly requires an EIP-55 checksummed address.
-      // WalletConnect returns lowercase, so we checksum it using blockchain_utils.
-      final checksummedAddress = ETHAddress(address).address;
+      final checksummedAddress = address;
 
       final params = SiweMessageParams(
         appDomain: widget.config.siweAppDomain,

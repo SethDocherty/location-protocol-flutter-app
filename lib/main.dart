@@ -29,7 +29,6 @@ class LocationProtocolApp extends StatelessWidget {
           LoginMethod.google,
           LoginMethod.twitter,
           LoginMethod.discord,
-          LoginMethod.siwe,
         ],
         autoCreateWallet: true,
       ),
