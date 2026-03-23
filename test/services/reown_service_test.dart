@@ -60,4 +60,22 @@ void main() {
       )),
     );
   });
+
+  test('connected session chain takes precedence over selected chain', () {
+    expect(
+      ReownService.resolveRequestChainId(
+        sessionChainId: 'eip155:1',
+        selectedChainId: 'eip155:11155111',
+      ),
+      'eip155:1',
+    );
+
+    expect(
+      ReownService.resolveRequestChainId(
+        sessionChainId: null,
+        selectedChainId: 'eip155:11155111',
+      ),
+      'eip155:11155111',
+    );
+  });
 }

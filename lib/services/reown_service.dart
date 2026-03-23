@@ -6,6 +6,19 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class ReownService {
   ReownAppKitModal? _appKitModal;
 
+  static String resolveRequestChainId({
+    required String? sessionChainId,
+    String? selectedChainId,
+  }) {
+    if (sessionChainId != null && sessionChainId.isNotEmpty) {
+      return sessionChainId;
+    }
+    if (selectedChainId != null && selectedChainId.isNotEmpty) {
+      return selectedChainId;
+    }
+    return 'eip155:11155111';
+  }
+
   bool get isAvailable => _projectId.isNotEmpty;
 
   bool get isInitialized => _appKitModal != null;
@@ -75,7 +88,10 @@ class ReownService {
   }
 
   String get currentChainId {
-    final chainIdStr = _appKitModal?.selectedChain?.chainId ?? 'eip155:11155111';
+    final chainIdStr = resolveRequestChainId(
+      sessionChainId: _appKitModal?.session?.chainId,
+      selectedChainId: _appKitModal?.selectedChain?.chainId,
+    );
     return chainIdStr.split(':').last;
   }
 
@@ -95,7 +111,10 @@ class ReownService {
     
     final response = await modal.request(
       topic: sessionTopic,
-      chainId: modal.selectedChain?.chainId ?? 'eip155:11155111',
+      chainId: resolveRequestChainId(
+        sessionChainId: modal.session?.chainId,
+        selectedChainId: modal.selectedChain?.chainId,
+      ),
       request: SessionRequestParams(
         method: 'personal_sign',
         params: [message, address],
@@ -125,7 +144,10 @@ class ReownService {
 
     final response = await modal.request(
       topic: sessionTopic,
-      chainId: modal.selectedChain?.chainId ?? 'eip155:11155111',
+      chainId: resolveRequestChainId(
+        sessionChainId: modal.session?.chainId,
+        selectedChainId: modal.selectedChain?.chainId,
+      ),
       request: SessionRequestParams(
         method: 'eth_signTypedData_v4',
         params: [address, typedData],
@@ -151,7 +173,10 @@ class ReownService {
     }
 
     final sessionTopic = modal.session?.topic ?? '';
-    final chainId = modal.selectedChain?.chainId ?? 'eip155:11155111';
+    final chainId = resolveRequestChainId(
+      sessionChainId: modal.session?.chainId,
+      selectedChainId: modal.selectedChain?.chainId,
+    );
 
     final response = await modal.request(
       topic: sessionTopic,
