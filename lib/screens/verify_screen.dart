@@ -1,12 +1,16 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:location_protocol/location_protocol.dart';
 
-import '../src/models/location_attestation.dart';
-import '../src/services/location_protocol_provider.dart';
+import '../protocol/attestation_service.dart';
 
+/// Screen for verifying an offchain attestation from pasted JSON.
 class VerifyScreen extends StatefulWidget {
-  const VerifyScreen({super.key});
+  final AttestationService service;
+
+  const VerifyScreen({super.key, required this.service});
 
   @override
   State<VerifyScreen> createState() => _VerifyScreenState();
@@ -15,7 +19,8 @@ class VerifyScreen extends StatefulWidget {
 class _VerifyScreenState extends State<VerifyScreen> {
   final _jsonController = TextEditingController();
   bool _verifying = false;
-  _VerifyResult? _result;
+  VerificationResult? _result;
+  String? _claimedSigner;
   String? _error;
 
   @override
@@ -28,121 +33,128 @@ class _VerifyScreenState extends State<VerifyScreen> {
     setState(() {
       _verifying = true;
       _result = null;
+      _claimedSigner = null;
       _error = null;
     });
 
     try {
-      final raw = _jsonController.text.trim();
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      
-      final OffchainLocationAttestation attestation;
-      
-      // Detect if it's EAS format (has 'sig' field) or our internal flat format
-      if (map.containsKey('sig')) {
-        attestation = OffchainLocationAttestation.fromEasOffchainJson(map);
-      } else {
-        attestation = OffchainLocationAttestation.fromJson(map);
-      }
+      final jsonText = _jsonController.text.trim();
+      final attestation = _parseAttestation(jsonText);
+      _claimedSigner = attestation.signer;
 
-      final service = LocationProtocolProvider.of(context);
-      final recovered = service.recoverSigner(attestation: attestation);
-      final isValid = recovered != null &&
-          recovered.toLowerCase() == attestation.signer.toLowerCase();
+      final result = widget.service.verifyOffchain(attestation);
 
-      setState(() {
-        _result = _VerifyResult(
-          attestation: attestation,
-          recoveredAddress: recovered ?? '(recovery failed)',
-          isValid: isValid,
-        );
-        _verifying = false;
-      });
+      if (mounted) setState(() => _result = result);
     } catch (e) {
-      setState(() {
-        _error = 'Error: $e';
-        _verifying = false;
-      });
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _verifying = false);
     }
+  }
+
+  /// Parses JSON into a [SignedOffchainAttestation].
+  ///
+  /// Supports the library's model format with fields:
+  /// uid, schemaUID, recipient, time, expirationTime, revocable,
+  /// refUID, data (hex), salt (hex), version, signature {v, r, s}, signer.
+  SignedOffchainAttestation _parseAttestation(String jsonText) {
+    final map = jsonDecode(jsonText) as Map<String, dynamic>;
+
+    // Parse hex data field to Uint8List
+    final dataHex = map['data'] as String;
+    final dataClean = dataHex.startsWith('0x') ? dataHex.substring(2) : dataHex;
+    final data = Uint8List.fromList([
+      for (var i = 0; i < dataClean.length; i += 2)
+        int.parse(dataClean.substring(i, i + 2), radix: 16),
+    ]);
+
+    final sigMap = map['signature'] as Map<String, dynamic>;
+
+    return SignedOffchainAttestation(
+      uid: map['uid'] as String,
+      schemaUID: map['schemaUID'] as String,
+      recipient: map['recipient'] as String,
+      time: BigInt.from(map['time'] as int),
+      expirationTime: BigInt.from(map['expirationTime'] as int),
+      revocable: map['revocable'] as bool,
+      refUID: map['refUID'] as String,
+      data: data,
+      salt: map['salt'] as String,
+      version: map['version'] as int,
+      signature: EIP712Signature(
+        v: sigMap['v'] as int,
+        r: sigMap['r'] as String,
+        s: sigMap['s'] as String,
+      ),
+      signer: map['signer'] as String,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Verify Attestation'),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: _jsonController,
-                decoration: const InputDecoration(
-                  labelText: 'Signed attestation JSON',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                  hintText: '{ "sig": { ... }, "signer": "0x..." }',
-                ),
-                maxLines: 8,
-                keyboardType: TextInputType.multiline,
+      appBar: AppBar(title: const Text('Verify Attestation')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Paste a signed attestation JSON to verify it.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _jsonController,
+              decoration: const InputDecoration(
+                labelText: 'Attestation JSON',
+                border: OutlineInputBorder(),
+                hintText: '{"uid":"0x...","schemaUID":"0x...",...}',
               ),
+              maxLines: 10,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _verifying ? null : _verify,
+              child: _verifying
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Verify'),
+            ),
+            if (_error != null) ...[
               const SizedBox(height: 16),
-              FilledButton.icon(
-                icon: _verifying
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.verified),
-                label: const Text('Verify'),
-                onPressed: _verifying ? null : _verify,
+              Card(
+                color: Theme.of(context).colorScheme.errorContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
               ),
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Text(_error!,
-                    style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
-              ],
-              if (_result != null) ...[
-                const SizedBox(height: 24),
-                _VerifyCard(result: _result!),
-              ],
             ],
-          ),
+            if (_result != null) ...[
+              const SizedBox(height: 16),
+              _buildResultCard(context),
+            ],
+          ],
         ),
       ),
     );
   }
-}
 
-class _VerifyResult {
-  final OffchainLocationAttestation attestation;
-  final String recoveredAddress;
-  final bool isValid;
-
-  const _VerifyResult({
-    required this.attestation,
-    required this.recoveredAddress,
-    required this.isValid,
-  });
-}
-
-class _VerifyCard extends StatelessWidget {
-  final _VerifyResult result;
-
-  const _VerifyCard({required this.result});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildResultCard(BuildContext context) {
     final theme = Theme.of(context);
-    final att = result.attestation;
-    final isValid = result.isValid;
+    final isValid = _result!.isValid;
 
     return Card(
+      color: isValid
+          ? Colors.green.withValues(alpha: 0.1)
+          : Colors.red.withValues(alpha: 0.1),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -151,77 +163,50 @@ class _VerifyCard extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  isValid ? Icons.verified_user : Icons.gpp_bad,
-                  color: isValid
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.error,
-                  size: 28,
+                  isValid ? Icons.check_circle : Icons.cancel,
+                  color: isValid ? Colors.green : Colors.red,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  isValid ? '✅ Valid Signature' : '❌ Invalid Signature',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: isValid
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.error,
+                  isValid ? 'VALID' : 'INVALID',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: isValid ? Colors.green : Colors.red,
                   ),
                 ),
               ],
             ),
             const Divider(),
-            const _Label('Recovered address'),
-            SelectableText(result.recoveredAddress,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(fontFamily: 'monospace')),
-            const SizedBox(height: 8),
-            const _Label('Claimed signer'),
-            SelectableText(att.signer,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(fontFamily: 'monospace')),
-            const Divider(),
-            const _Label('Location'),
-            SelectableText(att.location,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(fontFamily: 'monospace')),
-            const SizedBox(height: 4),
-            const _Label('Timestamp'),
-            Text(
-              DateTime.fromMillisecondsSinceEpoch(att.eventTimestamp * 1000)
-                  .toUtc()
-                  .toIso8601String(),
-              style: theme.textTheme.bodySmall,
-            ),
-            if (att.memo != null) ...[
-              const SizedBox(height: 4),
-              const _Label('Memo'),
-              Text(att.memo!, style: theme.textTheme.bodySmall),
-            ],
-            const SizedBox(height: 4),
-            const _Label('UID'),
-            SelectableText(att.uid,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(fontFamily: 'monospace')),
+            _infoRow('Recovered Address', _result!.recoveredAddress),
+            if (_claimedSigner != null)
+              _infoRow('Claimed Signer', _claimedSigner!),
+            if (_result!.reason != null) _infoRow('Reason', _result!.reason!),
           ],
         ),
       ),
     );
   }
-}
 
-class _Label extends StatelessWidget {
-  final String text;
-
-  const _Label(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.secondary,
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
