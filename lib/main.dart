@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:provider/provider.dart';
 
 import 'privy/privy_module.dart';
 import 'screens/home_screen.dart';
+import 'services/reown_service.dart';
+import 'providers/app_wallet_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,24 +33,39 @@ class LocationProtocolApp extends StatelessWidget {
         ],
         autoCreateWallet: true,
       ),
-      child: MaterialApp(
-        title: 'Location Protocol Signature Service',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF1565C0),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF1565C0),
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-        ),
-        home: const HomeScreen(),
+      child: Builder(
+        builder: (context) {
+          return MultiProvider(
+            providers: [
+              Provider<ReownService>(create: (_) => ReownService()),
+              ChangeNotifierProvider<AppWalletProvider>(
+                create: (context) => AppWalletProvider(
+                  privyAuth: PrivyAuthProvider.of(context),
+                  reownService: context.read<ReownService>(),
+                ),
+              ),
+            ],
+            child: MaterialApp(
+              title: 'Location Protocol Signature Service',
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData(
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: const Color(0xFF1565C0),
+                  brightness: Brightness.light,
+                ),
+                useMaterial3: true,
+              ),
+              darkTheme: ThemeData(
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: const Color(0xFF1565C0),
+                  brightness: Brightness.dark,
+                ),
+                useMaterial3: true,
+              ),
+              home: const HomeScreen(),
+            ),
+          );
+        },
       ),
     );
   }
