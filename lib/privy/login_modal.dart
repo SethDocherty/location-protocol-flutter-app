@@ -18,6 +18,9 @@ import 'flows/sms_flow.dart';
 import 'privy_auth_config.dart';
 import 'privy_auth_provider.dart';
 import 'widgets/login_method_button.dart';
+import '../providers/app_wallet_provider.dart';
+import '../widgets/private_key_import_dialog.dart';
+import 'package:provider/provider.dart';
 
 /// Opens the Privy login modal as a bottom sheet.
 ///
@@ -169,6 +172,23 @@ class _LoginModalRootState extends State<_LoginModalRoot> {
             method: method,
             onTap: () => _onMethodSelected(method),
           ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () async {
+            final key = await showPrivateKeyImportDialog(context);
+            if (key != null && key.isNotEmpty && mounted) {
+              final walletProvider = Provider.of<AppWalletProvider>(context, listen: false);
+              walletProvider.setPrivateKey(key);
+              Navigator.of(context).pop();
+            }
+          },
+          icon: const Icon(Icons.key),
+          label: const Text('Import Private Key'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            alignment: Alignment.center,
+          ),
+        ),
         if (appearance.footerText != null) ...[
           const SizedBox(height: 24),
           Text(
