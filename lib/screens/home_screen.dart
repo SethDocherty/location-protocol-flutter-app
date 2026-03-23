@@ -4,8 +4,9 @@ import 'package:location_protocol/location_protocol.dart';
 import '../privy/privy_module.dart';
 import '../protocol/protocol_module.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_wallet_provider.dart';
 
-import '../widgets/private_key_import_dialog.dart';
 import 'sign_screen.dart';
 import 'verify_screen.dart';
 import 'onchain_attest_screen.dart';
@@ -13,7 +14,7 @@ import 'register_schema_screen.dart';
 import 'timestamp_screen.dart';
 import '../settings/settings_screen.dart';
 import '../settings/settings_service.dart';
-import '../services/reown_service.dart';
+
 
 /// Main screen — auth-gated navigation hub for all attestation operations.
 class HomeScreen extends StatefulWidget {
@@ -26,14 +27,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _chainId = 11155111; // default until settings load
   String? _rpcUrl;
-  String? _privateKeyHex;
-  final ReownService _reownService = ReownService();
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
-    _reownService.initialize(context);
   }
 
   Future<void> _loadSettings() async {
@@ -42,16 +40,16 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _chainId = settings.selectedChainId;
         _rpcUrl = settings.rpcUrl;
-        _privateKeyHex = settings.privateKeyHex;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = PrivyAuthProvider.of(context);
+    final walletProvider = context.watch<AppWalletProvider>();
+    final auth = walletProvider.privyAuth;
 
-    if (!auth.isReady) {
+    if (auth == null || !auth.isReady) {
       return Scaffold(
         appBar: AppBar(title: const Text('Location Protocol')),
         body: const Center(child: CircularProgressIndicator()),
@@ -73,11 +71,11 @@ class _HomeScreenState extends State<HomeScreen> {
               if (mounted) _loadSettings();
             },
           ),
-          if (auth.isAuthenticated)
+          if (walletProvider.connectionType != ConnectionType.none)
             IconButton(
               icon: const Icon(Icons.logout),
-              tooltip: 'Logout',
-              onPressed: () => auth.logout(),
+              tooltip: 'Disconnect',
+              onPressed: () => walletProvider.disconnect(),
             ),
         ],
       ),
@@ -86,36 +84,34 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (auth.isAuthenticated && auth.walletAddress != null) ...[
-              _WalletCard(address: auth.walletAddress!),
+            if (walletProvider.connectionType != ConnectionType.none) ...[
+              _WalletCard(
+                address: walletProvider.walletAddress ?? 'Unknown',
+                type: walletProvider.connectionType,
+              ),
               const SizedBox(height: 16),
             ],
 
-            if (!auth.isAuthenticated) ...[
+            if (walletProvider.connectionType == ConnectionType.none) ...[
               _buildLoginButton(context),
               const SizedBox(height: 12),
             ],
 
             // --- Always available ---
             _SectionHeader('Offchain Operations'),
-            _buildPrivateKeySignButton(context),
+            _buildSignOffchainButton(context, walletProvider),
             const SizedBox(height: 8),
             _buildVerifyButton(context),
-            const SizedBox(height: 8),
+            const SizedBox(height: 24),
 
-            // --- Auth-gated ---
-            if (auth.isAuthenticated) ...[
-              _buildSignWithWalletButton(context, auth),
+            // --- Onchain (Privy Only) ---
+            if (walletProvider.connectionType == ConnectionType.privy) ...[
+              _SectionHeader('Onchain Operations (Privy Only)'),
+              _buildOnchainAttestButton(context, walletProvider),
               const SizedBox(height: 8),
-              _buildExternalWalletSignButton(context, auth),
-              const SizedBox(height: 24),
-
-              _SectionHeader('Onchain Operations'),
-              _buildOnchainAttestButton(context, auth),
+              _buildRegisterSchemaButton(context, walletProvider),
               const SizedBox(height: 8),
-              _buildRegisterSchemaButton(context, auth),
-              const SizedBox(height: 8),
-              _buildTimestampButton(context, auth),
+              _buildTimestampButton(context, walletProvider),
             ],
           ],
         ),
@@ -126,23 +122,29 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildLoginButton(BuildContext context) {
     return FilledButton.icon(
       onPressed: () => showPrivyLoginModal(context),
-      icon: const Icon(Icons.login),
-      label: const Text('Login with Privy'),
+      icon: const Icon(Icons.account_balance_wallet),
+      label: const Text('Connect Wallet'),
     );
   }
 
-  Widget _buildSignWithWalletButton(BuildContext context, PrivyAuthState auth) {
+  Widget _buildSignOffchainButton(BuildContext context, AppWalletProvider walletProvider) {
     return _ActionButton(
       icon: Icons.edit_note,
-      label: 'Sign with Embedded Wallet',
-      onPressed: () {
-        if (auth.wallet == null) {
+      label: 'Sign Offchain Attestation',
+      onPressed: () async {
+        if (walletProvider.connectionType == ConnectionType.none) {
+          showPrivyLoginModal(context);
+          return;
+        }
+
+        final signer = walletProvider.getSigner(_chainId);
+        if (signer == null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No embedded wallet available')),
+            const SnackBar(content: Text('Could not initialize signer')),
           );
           return;
         }
-        final signer = PrivySigner.fromWallet(auth.wallet!);
+
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
@@ -150,123 +152,14 @@ class _HomeScreenState extends State<HomeScreen> {
           fallbackRpcUrl: _rpcUrl,
           sponsorGas: isSponsored,
         );
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => SignScreen(service: service)));
-      },
-    );
-  }
-
-  Widget _buildExternalWalletSignButton(
-    BuildContext context,
-    PrivyAuthState auth,
-  ) {
-    return _ActionButton(
-      icon: Icons.account_balance_wallet_outlined,
-      label: 'Sign with External Wallet',
-      onPressed: () async {
-        final address = await _reownService.connectAndGetAddress();
-        if (address == null || address.isEmpty) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('External wallet connection failed or cancelled')),
-            );
-          }
-          return;
-        }
-
-        final signer = ExternalWalletSigner(
-          walletAddress: address,
-          onSignTypedData: (typedData) async {
-            return await _reownService.signTypedData(context, typedData);
-          },
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => SignScreen(service: service)),
         );
-        final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
-        final service = AttestationService(
-          signer: signer,
-          chainId: _chainId,
-          fallbackRpcUrl: _rpcUrl,
-          sponsorGas: isSponsored,
-        );
-        
-        if (context.mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => SignScreen(service: service))
-          );
-        }
       },
     );
   }
 
-  Widget _buildPrivateKeySignButton(BuildContext context) {
-    return _ActionButton(
-      icon: Icons.key,
-      label: 'Sign with Private Key',
-      onPressed: () async {
-        String? key = _privateKeyHex;
-        bool usingSaved = key != null && key.trim().isNotEmpty;
 
-        if (!usingSaved) {
-          key = await showPrivateKeyImportDialog(context);
-        }
-
-        if (key == null || key.trim().isEmpty || !context.mounted) return;
-
-        // Ensure consistent formatting (strip 0x if present, common in protocol libs)
-        var finalKey = key.trim().replaceAll(RegExp(r'\s+'), '');
-        if (finalKey.startsWith('0x')) finalKey = finalKey.substring(2);
-
-        // Minimal validation before trying to use it
-        if (finalKey.length != 64 || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(finalKey)) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  usingSaved
-                      ? 'Saved Private Key is invalid (should be 64-char hex)'
-                      : 'Invalid Private Key entered',
-                ),
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
-            );
-          }
-          // If the saved key was bad, let the user enter a one-time key
-          if (usingSaved && context.mounted) {
-            final manualKey = await showPrivateKeyImportDialog(context);
-            if (manualKey != null && manualKey.trim().isNotEmpty && context.mounted) {
-              // Recurse once with the manual key or just handle it here.
-              // For simplicity, let's just use the manual key if it passes.
-              var cleanedManual = manualKey.trim().replaceAll(RegExp(r'\s+'), '');
-              if (cleanedManual.startsWith('0x')) cleanedManual = cleanedManual.substring(2);
-              if (cleanedManual.length == 64 && RegExp(r'^[0-9a-fA-F]+$').hasMatch(cleanedManual)) {
-                _launchSignScreen(cleanedManual);
-              }
-            }
-          }
-          return;
-        }
-
-        _launchSignScreen(finalKey);
-      },
-    );
-  }
-
-  void _launchSignScreen(String privateKeyHex) {
-    final signer = LocalKeySigner(privateKeyHex: privateKeyHex);
-    final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
-    final service = AttestationService(
-      signer: signer,
-      chainId: _chainId,
-      fallbackRpcUrl: _rpcUrl,
-      sponsorGas: isSponsored,
-    );
-
-    if (mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => SignScreen(service: service)),
-      );
-    }
-  }
 
   Widget _buildVerifyButton(BuildContext context) {
     // Create a dummy service for verification (signer not used for verify)
@@ -294,20 +187,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildOnchainAttestButton(BuildContext context, PrivyAuthState auth) {
+  Widget _buildOnchainAttestButton(BuildContext context, AppWalletProvider walletProvider) {
     return _ActionButton(
       icon: Icons.cloud_upload,
       label: 'Attest Onchain',
       onPressed: () {
-        if (auth.wallet == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Onchain operations require an embedded wallet'),
-            ),
-          );
-          return;
-        }
-        final signer = PrivySigner.fromWallet(auth.wallet!);
+        final signer = walletProvider.getSigner(_chainId);
+        if (signer == null) return;
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
@@ -317,28 +203,20 @@ class _HomeScreenState extends State<HomeScreen> {
         );
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) =>
-                OnchainAttestScreen(service: service, wallet: auth.wallet!),
+            builder: (_) => OnchainAttestScreen(service: service),
           ),
         );
       },
     );
   }
 
-  Widget _buildRegisterSchemaButton(BuildContext context, PrivyAuthState auth) {
+  Widget _buildRegisterSchemaButton(BuildContext context, AppWalletProvider walletProvider) {
     return _ActionButton(
       icon: Icons.app_registration,
       label: 'Register Schema',
       onPressed: () {
-        if (auth.wallet == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Schema registration requires an embedded wallet'),
-            ),
-          );
-          return;
-        }
-        final signer = PrivySigner.fromWallet(auth.wallet!);
+        final signer = walletProvider.getSigner(_chainId);
+        if (signer == null) return;
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
@@ -348,28 +226,20 @@ class _HomeScreenState extends State<HomeScreen> {
         );
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) =>
-                RegisterSchemaScreen(service: service, wallet: auth.wallet!),
+            builder: (_) => RegisterSchemaScreen(service: service),
           ),
         );
       },
     );
   }
 
-  Widget _buildTimestampButton(BuildContext context, PrivyAuthState auth) {
+  Widget _buildTimestampButton(BuildContext context, AppWalletProvider walletProvider) {
     return _ActionButton(
       icon: Icons.access_time,
       label: 'Timestamp Offchain UID',
       onPressed: () {
-        if (auth.wallet == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Timestamping requires an embedded wallet'),
-            ),
-          );
-          return;
-        }
-        final signer = PrivySigner.fromWallet(auth.wallet!);
+        final signer = walletProvider.getSigner(_chainId);
+        if (signer == null) return;
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
@@ -379,8 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) =>
-                TimestampScreen(service: service, wallet: auth.wallet!),
+            builder: (_) => TimestampScreen(service: service),
           ),
         );
       },
@@ -390,10 +259,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _WalletCard extends StatelessWidget {
   final String address;
-  const _WalletCard({required this.address});
+  final ConnectionType type;
+  const _WalletCard({required this.address, required this.type});
 
   @override
   Widget build(BuildContext context) {
+    final typeLabel = switch (type) {
+      ConnectionType.privy => 'Privy Wallet',
+      ConnectionType.external => 'External Wallet',
+      ConnectionType.privateKey => 'Private Key',
+      ConnectionType.none => 'None',
+    };
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -405,9 +282,9 @@ class _WalletCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Connected Wallet',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  Text(
+                    typeLabel,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   SelectableText(
                     address,
