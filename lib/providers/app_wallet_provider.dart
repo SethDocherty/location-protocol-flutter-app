@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:privy_flutter/privy_flutter.dart';
 import 'package:location_protocol/location_protocol.dart';
 import '../privy/privy_auth_provider.dart';
 import '../services/reown_service.dart';
@@ -10,6 +12,8 @@ enum ConnectionType { privy, external, privateKey, none }
 class AppWalletProvider extends ChangeNotifier {
   final PrivyAuthState? _privyAuth;
   final ReownService? _reownService;
+
+  PrivyAuthState? get privyAuth => _privyAuth;
 
   String? _privateKeyHex;
   String? _externalAddress;
@@ -71,6 +75,14 @@ class AppWalletProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> connectExternal(BuildContext context) async {
+    if (_reownService == null) return;
+    final address = await _reownService.connectAndGetAddress();
+    if (address != null && address.isNotEmpty) {
+      setExternalAddress(address);
+    }
+  }
+
   void logout() {
     _privateKeyHex = null;
     _externalAddress = null;
@@ -78,7 +90,9 @@ class AppWalletProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Signer? getSigner(int targetChainId) {
+  void disconnect() => logout();
+
+  Signer? getSigner(BuildContext context, int targetChainId) {
     switch (connectionType) {
       case ConnectionType.privy:
         if (_privyAuth?.wallet != null) {
@@ -90,9 +104,7 @@ class AppWalletProvider extends ChangeNotifier {
           return ExternalWalletSigner(
             walletAddress: _externalAddress!,
             onSignTypedData: (typedData) async {
-              // Note: We need a BuildContext for Reown signTypedData usually.
-              // This might need refinement if getSigner is called outside UI.
-              throw UnimplementedError('External signing requires UI context or pre-configured service');
+              return await _reownService.signTypedData(context, typedData);
             },
           );
         }
@@ -107,13 +119,23 @@ class AppWalletProvider extends ChangeNotifier {
     }
   }
 
-  Future<String?> sendTransaction(Map<String, dynamic> txRequest) async {
-    if (connectionType == ConnectionType.privy && _privyAuth?.wallet != null) {
-      // Implementation for Privy
-      throw UnimplementedError('Privy transaction not yet wired');
-    } else if (connectionType == ConnectionType.external && _reownService != null) {
-      // Implementation for Reown
-      throw UnimplementedError('Reown transaction not yet wired');
+  Future<String?> sendTransaction(Map<String, dynamic> txRequest, {BuildContext? context}) async {
+    final wallet = _privyAuth?.wallet;
+    if (connectionType == ConnectionType.privy && wallet != null) {
+      final result = await wallet.provider.request(
+        EthereumRpcRequest(
+          method: 'eth_sendTransaction',
+          params: [jsonEncode(txRequest)],
+        ),
+      );
+      String? hash;
+      result.fold(
+        onSuccess: (r) => hash = r.data,
+        onFailure: (e) => throw Exception('Privy transaction failed: ${e.message}'),
+      );
+      return hash;
+    } else if (connectionType == ConnectionType.external && _reownService != null && context != null) {
+      return await _reownService.sendTransaction(context, txRequest);
     }
     return null;
   }

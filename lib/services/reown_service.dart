@@ -107,4 +107,32 @@ class ReownService {
     
     return EIP712Signature.fromHex(response.toString());
   }
+
+  Future<String?> sendTransaction(BuildContext context, Map<String, dynamic> txRequest) async {
+    if (!appKitModal.isConnected) {
+      await appKitModal.openModalView(); 
+    }
+    
+    if (!appKitModal.isConnected) {
+      throw Exception('User cancelled connection');
+    }
+
+    final sessionTopic = appKitModal.session!.topic ?? '';
+    final chainId = appKitModal.selectedChain?.chainId ?? 'eip155:11155111';
+
+    final response = await appKitModal.request(
+      topic: sessionTopic,
+      chainId: chainId,
+      request: SessionRequestParams(
+        method: 'eth_sendTransaction',
+        params: [txRequest],
+      ),
+    );
+    
+    if (response == null) {
+      throw Exception('Transaction cancelled or failed');
+    }
+    
+    return response.toString();
+  }
 }
