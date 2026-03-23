@@ -205,7 +205,11 @@ class AppWalletProvider extends ChangeNotifier {
           return ExternalWalletSigner(
             walletAddress: address,
             onSignTypedData: (typedData) async {
-              return reownService.signTypedData(context, typedData);
+              return reownService.signTypedData(
+                context,
+                typedData,
+                targetChainId: 'eip155:$targetChainId',
+              );
             },
           );
         }
@@ -250,7 +254,19 @@ class AppWalletProvider extends ChangeNotifier {
         if (_reownService == null || context == null) {
           throw StateError('Transactions unavailable for current connection type');
         }
-        return _reownService.sendTransaction(context, txRequest);
+        final requestedChainId = txRequest['chainId'];
+        String? targetChainId;
+        if (requestedChainId is String && requestedChainId.startsWith('0x')) {
+          final chainIdInt = int.tryParse(requestedChainId.substring(2), radix: 16);
+          if (chainIdInt != null) {
+            targetChainId = 'eip155:$chainIdInt';
+          }
+        }
+        return _reownService.sendTransaction(
+          context,
+          txRequest,
+          targetChainId: targetChainId,
+        );
       case ConnectionType.privateKey:
       case ConnectionType.none:
         throw StateError('Transactions unavailable for current connection type');

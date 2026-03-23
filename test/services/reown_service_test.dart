@@ -78,4 +78,8 @@ void main() {
       'eip155:11155111',
     );
   });
+
+  test('uses the Android custom scheme redirect', () {
+    expect(ReownService.appScheme, 'locationprotocol');
+  });
 }

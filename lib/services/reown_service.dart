@@ -6,6 +6,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class ReownService {
   ReownAppKitModal? _appKitModal;
 
+  static const String appScheme = 'locationprotocol';
+
   static String resolveRequestChainId({
     required String? sessionChainId,
     String? selectedChainId,
@@ -55,7 +57,7 @@ class ReownService {
           icons: ['https://decentralizedgeo.org/static/media/logo.4745e76c17791ca44053.jpg'],
           redirect: Redirect(
             native: 'locationprotocol://',
-            universal: 'https://github.com/DecentralizedGeo',
+            linkMode: false,
           ),
         ),
       );
@@ -81,6 +83,31 @@ class ReownService {
     }
 
     return modal.session?.getAddress('eip155');
+  }
+
+  Future<String> _syncChainForRequest(
+    ReownAppKitModal modal, {
+    String? targetChainId,
+  }) async {
+    final desiredChainId = targetChainId ?? modal.selectedChain?.chainId;
+    if (desiredChainId == null || desiredChainId.isEmpty) {
+      return resolveRequestChainId(
+        sessionChainId: modal.session?.chainId,
+        selectedChainId: modal.selectedChain?.chainId,
+      );
+    }
+
+    final currentSessionChainId = modal.session?.chainId;
+    if (currentSessionChainId != null && currentSessionChainId != desiredChainId) {
+      final namespace = NamespaceUtils.getNamespaceFromChain(desiredChainId);
+      final chainId = ReownAppKitModalNetworks.getIdFromChain(desiredChainId);
+      final networkInfo = ReownAppKitModalNetworks.getNetworkInfo(namespace, chainId);
+      if (networkInfo != null) {
+        await modal.selectChain(networkInfo, switchChain: true);
+      }
+    }
+
+    return desiredChainId;
   }
 
   String get currentAddress {
@@ -128,7 +155,11 @@ class ReownService {
     return response.toString();
   }
 
-  Future<EIP712Signature> signTypedData(BuildContext context, Map<String, dynamic> typedData) async {
+  Future<EIP712Signature> signTypedData(
+    BuildContext context,
+    Map<String, dynamic> typedData, {
+    String? targetChainId,
+  }) async {
     final modal = _requireModal();
 
     if (!modal.isConnected) {
@@ -141,13 +172,14 @@ class ReownService {
 
     final sessionTopic = modal.session?.topic ?? '';
     final address = modal.session?.getAddress('eip155') ?? '';
+    final chainId = await _syncChainForRequest(
+      modal,
+      targetChainId: targetChainId,
+    );
 
     final response = await modal.request(
       topic: sessionTopic,
-      chainId: resolveRequestChainId(
-        sessionChainId: modal.session?.chainId,
-        selectedChainId: modal.selectedChain?.chainId,
-      ),
+      chainId: chainId,
       request: SessionRequestParams(
         method: 'eth_signTypedData_v4',
         params: [address, typedData],
@@ -161,7 +193,11 @@ class ReownService {
     return EIP712Signature.fromHex(response.toString());
   }
 
-  Future<String?> sendTransaction(BuildContext context, Map<String, dynamic> txRequest) async {
+  Future<String?> sendTransaction(
+    BuildContext context,
+    Map<String, dynamic> txRequest, {
+    String? targetChainId,
+  }) async {
     final modal = _requireModal();
 
     if (!modal.isConnected) {
@@ -173,9 +209,9 @@ class ReownService {
     }
 
     final sessionTopic = modal.session?.topic ?? '';
-    final chainId = resolveRequestChainId(
-      sessionChainId: modal.session?.chainId,
-      selectedChainId: modal.selectedChain?.chainId,
+    final chainId = await _syncChainForRequest(
+      modal,
+      targetChainId: targetChainId,
     );
 
     final response = await modal.request(
