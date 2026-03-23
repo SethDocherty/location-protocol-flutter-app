@@ -208,13 +208,13 @@ git commit -m "feat: implement AppWalletProvider base logic"
 - Modify: `lib/privy/login_modal.dart`
 - Modify: `lib/widgets/private_key_import_dialog.dart`
 
-- [ ] **Step 1: Write UI tests (if applicable) or proceed**
+- [x] **Step 1: Write UI tests (if applicable) or proceed**
 Given Flutter UI testing complexities with bottom sheets, rely on static analysis and manual verification.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 N/A
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `lib/privy/login_modal.dart`, inside `_buildSelector()`, add a new list item:
 ```dart
