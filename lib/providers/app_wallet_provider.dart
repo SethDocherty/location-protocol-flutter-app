@@ -174,6 +174,7 @@ class AppWalletProvider extends ChangeNotifier {
 
   Future<void> connectExternal(BuildContext context) async {
     if (_reownService == null) return;
+    await _reownService.initialize(context);
     final address = await _reownService.connectAndGetAddress();
     if (address != null && address.isNotEmpty) {
       await setExternalAddress(address);
