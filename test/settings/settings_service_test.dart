@@ -30,23 +30,7 @@ void main() {
       expect(service.selectedChainId, 1);
     });
 
-    test('privateKeyHex defaults to empty string', () async {
-      final service = await SettingsService.create();
-      expect(service.privateKeyHex, '');
-    });
 
-    test('saves and retrieves privateKeyHex', () async {
-      final service = await SettingsService.create();
-      await service.setPrivateKeyHex('abcd1234');
-      expect(service.privateKeyHex, 'abcd1234');
-    });
-
-    test('clearPrivateKey removes the stored key', () async {
-      final service = await SettingsService.create();
-      await service.setPrivateKeyHex('secret');
-      await service.clearPrivateKey();
-      expect(service.privateKeyHex, '');
-    });
 
     test('generates correct Infura URL for Sepolia', () async {
       final service = await SettingsService.create();

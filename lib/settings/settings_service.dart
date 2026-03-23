@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsService {
   static const _keyRpcUrl = 'settings_rpc_url';
   static const _keyChainId = 'settings_chain_id';
-  static const _keyPrivateKey = 'settings_private_key';
+
   static const _keyInfuraApiKey = 'settings_infura_api_key';
 
   static const Map<int, String> _infuraSubdomains = {
@@ -84,10 +84,5 @@ class SettingsService {
     return 'https://$subdomain.infura.io/v3/$apiKey';
   }
 
-  String get privateKeyHex => _prefs.getString(_keyPrivateKey) ?? '';
 
-  Future<void> setPrivateKeyHex(String key) =>
-      _prefs.setString(_keyPrivateKey, key);
-
-  Future<void> clearPrivateKey() => _prefs.remove(_keyPrivateKey);
 }
