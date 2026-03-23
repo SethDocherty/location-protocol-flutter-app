@@ -30,6 +30,21 @@ void main() {
       expect(service.selectedChainId, 1);
     });
 
+    test('lastActiveWalletMode defaults to null', () async {
+      final service = await SettingsService.create();
+      expect(service.lastActiveWalletMode, isNull);
+    });
+
+    test('saves, retrieves, and clears lastActiveWalletMode', () async {
+      final service = await SettingsService.create();
+
+      await service.setLastActiveWalletMode('external');
+      expect(service.lastActiveWalletMode, 'external');
+
+      await service.clearLastActiveWalletMode();
+      expect(service.lastActiveWalletMode, isNull);
+    });
+
 
 
     test('generates correct Infura URL for Sepolia', () async {

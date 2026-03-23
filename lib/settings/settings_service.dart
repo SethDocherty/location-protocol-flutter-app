@@ -2,15 +2,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Persists dev/test settings via SharedPreferences.
 ///
-/// Stores RPC URL, chain ID, and (optionally) a private key for
-/// the dev/test private-key path. The private key is stored in
-/// SharedPreferences which is NOT secure storage — this is acceptable
-/// for a dev/test tool, not for production key management.
+/// Stores RPC URL, chain ID, Infura configuration, and the last active
+/// non-secret wallet mode used by the app.
 class SettingsService {
   static const _keyRpcUrl = 'settings_rpc_url';
   static const _keyChainId = 'settings_chain_id';
 
   static const _keyInfuraApiKey = 'settings_infura_api_key';
+  static const _keyLastActiveWalletMode = 'settings_last_active_wallet_mode';
 
   static const Map<int, String> _infuraSubdomains = {
     1: 'mainnet',
@@ -65,6 +64,14 @@ class SettingsService {
   Future<void> setInfuraApiKey(String key) =>
       _prefs.setString(_keyInfuraApiKey, key);
 
+    String? get lastActiveWalletMode => _prefs.getString(_keyLastActiveWalletMode);
+
+    Future<bool> setLastActiveWalletMode(String mode) =>
+      _prefs.setString(_keyLastActiveWalletMode, mode);
+
+    Future<bool> clearLastActiveWalletMode() =>
+      _prefs.remove(_keyLastActiveWalletMode);
+
   /// Whether the currently selected chain is supported by Infura.
   bool get isInfuraSupported => isChainSupported(selectedChainId);
 
@@ -83,6 +90,4 @@ class SettingsService {
     if (subdomain == null || apiKey.isEmpty) return null;
     return 'https://$subdomain.infura.io/v3/$apiKey';
   }
-
-
 }
