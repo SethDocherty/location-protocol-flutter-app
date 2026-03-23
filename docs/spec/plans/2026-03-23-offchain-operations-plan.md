@@ -6,6 +6,8 @@
 
 **Architecture:** Create a `ChangeNotifier` called `AppWalletProvider` that securely tracks the active `ConnectionType` and exposes a unified `.getSigner()` and `.sendTransaction()` method. Update the Login Modal to support private key imports, consolidate the `HomeScreen` UI by removing disparate connection buttons, and decouple onchain screens from Privy's concrete `EmbeddedEthereumWallet` so that Reown external wallets can natively transact.
 
+**Status Note:** The active UX now uses direct Reown external-wallet login; runtime SIWE navigation is intentionally disconnected.
+
 **Tech Stack:** Flutter, Provider, Privy SDK, Reown AppKit.
 
 ---

@@ -37,19 +37,19 @@
 - Modify: `lib/services/reown_service.dart`
 - Create: `test/services/reown_service_test.dart`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `test/services/reown_service_test.dart` with focused behavior tests:
 - Service reports unavailable when `REOWN_PROJECT_ID` is empty/missing.
 - `connectAndGetAddress()` returns `null` when unavailable.
 - `personalSign`, `signTypedData`, and `sendTransaction` throw `StateError('ReownService unavailable')` when unavailable (no `LateInitializationError`).
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `flutter test test/services/reown_service_test.dart`
 Expected: FAIL with missing guards / uninitialized modal behavior.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `lib/services/reown_service.dart`:
 - Add explicit fields/getters for availability and initialization.
@@ -57,12 +57,12 @@ In `lib/services/reown_service.dart`:
 - Guard all public wallet operations behind readiness checks.
 - Ensure no call path can touch uninitialized `appKitModal`.
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
 
 Run: `flutter test test/services/reown_service_test.dart`
 Expected: PASS
 
-- [ ] **Step 5: Analyze and commit**
+- [x] **Step 5: Analyze and commit**
 
 Run: `flutter analyze lib/services/reown_service.dart test/services/reown_service_test.dart`
 Expected: PASS
@@ -81,7 +81,7 @@ git commit -m "fix: harden reown service availability and init guards"
 - Modify: `lib/settings/settings_service.dart`
 - Modify: `test/providers/app_wallet_provider_test.dart`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add tests in `test/providers/app_wallet_provider_test.dart`:
 - last active mode (`privy`/`external`) is persisted and restored.
@@ -92,12 +92,12 @@ Add tests in `test/providers/app_wallet_provider_test.dart`:
 	- `privy`/`external`: returns tx hash string on success.
 	- `privateKey`/`none`: throws `StateError('Transactions unavailable for current connection type')`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `flutter test test/providers/app_wallet_provider_test.dart`
 Expected: FAIL due to missing mode persistence / precedence / routing behavior.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `lib/settings/settings_service.dart`:
 - Add non-secret key for `lastActiveWalletMode`.
@@ -109,12 +109,12 @@ In `lib/providers/app_wallet_provider.dart`:
 - Keep private key ephemeral; never store private key in `SettingsService`.
 - Ensure `connectionType`, `getSigner`, and `sendTransaction` are deterministic by active mode, including absent/invalid persisted mode fallback.
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
 
 Run: `flutter test test/providers/app_wallet_provider_test.dart`
 Expected: PASS
 
-- [ ] **Step 5: Analyze and commit**
+- [x] **Step 5: Analyze and commit**
 
 Run: `flutter analyze lib/providers/app_wallet_provider.dart lib/settings/settings_service.dart test/providers/app_wallet_provider_test.dart`
 Expected: PASS
@@ -136,7 +136,7 @@ git commit -m "feat: persist active wallet mode and normalize provider routing"
 - Create: `test/privy/login_modal_test.dart`
 - Create: `test/widgets/private_key_import_dialog_test.dart`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `test/privy/login_modal_test.dart` with cases:
 - Selector shows `Import Private Key` and `Connect External Wallet` options.
@@ -147,7 +147,7 @@ Create `test/widgets/private_key_import_dialog_test.dart` with cases:
 - Dialog returns key to caller and does not call `SettingsService` persistence APIs.
 - Cancel/empty submission does not modify provider state.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `flutter test test/privy/login_modal_test.dart`
 Expected: FAIL while SIWE path still present and external direct option incomplete.
@@ -155,7 +155,7 @@ Expected: FAIL while SIWE path still present and external direct option incomple
 Run: `flutter test test/widgets/private_key_import_dialog_test.dart`
 Expected: FAIL until dialog persistence coupling is removed/guarded.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `lib/main.dart`:
 - Remove `LoginMethod.siwe` from runtime login methods list.
@@ -174,7 +174,7 @@ In `lib/widgets/private_key_import_dialog.dart`:
 In `lib/privy/flows/siwe_flow.dart`:
 - Keep file intact and compile-safe; do not delete.
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
 
 Run: `flutter test test/privy/login_modal_test.dart`
 Expected: PASS
@@ -182,7 +182,7 @@ Expected: PASS
 Run: `flutter test test/widgets/private_key_import_dialog_test.dart`
 Expected: PASS
 
-- [ ] **Step 5: Analyze and commit**
+- [x] **Step 5: Analyze and commit**
 
 Run: `flutter analyze lib/main.dart lib/privy/privy_auth_config.dart lib/privy/login_modal.dart lib/privy/flows/siwe_flow.dart lib/widgets/private_key_import_dialog.dart test/privy/login_modal_test.dart test/widgets/private_key_import_dialog_test.dart`
 Expected: PASS
@@ -203,19 +203,19 @@ git commit -m "refactor: use direct external wallet login and disconnect runtime
 - Modify: `lib/screens/timestamp_screen.dart`
 - Create: `test/screens/home_screen_auth_test.dart`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `test/screens/home_screen_auth_test.dart` to verify:
 - disconnected state shows login CTA.
 - connected external state can access unified offchain signing path.
 - onchain action visibility is based on `canSendTransactions`, not Privy-only checks.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `flutter test test/screens/home_screen_auth_test.dart`
 Expected: FAIL while home gating still Privy-specific.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `lib/screens/home_screen.dart`:
 - Replace Privy-only onchain gating with provider capability checks.
@@ -226,12 +226,12 @@ In onchain screens:
 	- success: non-empty tx hash is displayed.
 	- provider `StateError`: surface user-friendly message and do not crash.
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
 
 Run: `flutter test test/screens/home_screen_auth_test.dart`
 Expected: PASS
 
-- [ ] **Step 5: Analyze and commit**
+- [x] **Step 5: Analyze and commit**
 
 Run: `flutter analyze lib/screens/home_screen.dart lib/screens/onchain_attest_screen.dart lib/screens/register_schema_screen.dart lib/screens/timestamp_screen.dart test/screens/home_screen_auth_test.dart`
 Expected: PASS
@@ -249,17 +249,17 @@ git commit -m "fix: align home and onchain flows with unified wallet provider"
 - Modify: `docs/spec/plans/2026-03-23-offchain-operations-plan.md`
 - Modify: `docs/spec/plans/2026-03-23-direct-external-wallet-implementation-plan.md` (checklist updates only)
 
-- [ ] **Step 1: Run full static analysis**
+- [x] **Step 1: Run full static analysis**
 
 Run: `flutter analyze`
 Expected: PASS
 
-- [ ] **Step 2: Run full test suite**
+- [x] **Step 2: Run full test suite**
 
 Run: `flutter test`
 Expected: PASS
 
-- [ ] **Step 3: Update status checkboxes and notes**
+- [x] **Step 3: Update status checkboxes and notes**
 
 In `docs/spec/plans/2026-03-23-offchain-operations-plan.md`:
 - Mark completed tasks that are truly done.
@@ -268,14 +268,14 @@ In `docs/spec/plans/2026-03-23-offchain-operations-plan.md`:
 In this plan file:
 - Mark any completed task steps and verification artifacts.
 
-- [ ] **Step 4: Commit verification + docs updates**
+- [x] **Step 4: Commit verification + docs updates**
 
 ```bash
 git add docs/spec/plans/2026-03-23-offchain-operations-plan.md docs/spec/plans/2026-03-23-direct-external-wallet-implementation-plan.md
 git commit -m "docs: reconcile offchain redesign status and direct external wallet plan"
 ```
 
-- [ ] **Step 5: Final gate before handoff/merge**
+- [x] **Step 5: Final gate before handoff/merge**
 
 If `flutter analyze` or `flutter test` failed in Task 5 steps 1-2:
 - Fix only scoped issues from Tasks 1-4.
@@ -288,3 +288,4 @@ If `flutter analyze` or `flutter test` failed in Task 5 steps 1-2:
 - Do not delete SIWE files during this implementation; only remove runtime entry points.
 - Do not persist private keys anywhere (memory-only).
 - Keep changes minimal and scoped to this behavior correction; avoid unrelated refactors.
+- Verification: `flutter analyze` passed with no issues; `flutter test` passed with all tests green.
