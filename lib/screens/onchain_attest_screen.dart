@@ -1,7 +1,8 @@
-import 'dart:convert';
+
 
 import 'package:flutter/material.dart';
-import 'package:privy_flutter/privy_flutter.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_wallet_provider.dart';
 
 import '../protocol/attestation_service.dart';
 import '../utils/network_links.dart';
@@ -12,12 +13,9 @@ import '../utils/network_links.dart';
 /// EASClient.buildAttestCallData → TxUtils.buildTxRequest → eth_sendTransaction
 class OnchainAttestScreen extends StatefulWidget {
   final AttestationService service;
-  final EmbeddedEthereumWallet wallet;
-
   const OnchainAttestScreen({
     super.key,
     required this.service,
-    required this.wallet,
   });
 
   @override
@@ -69,16 +67,8 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
         contractAddress: widget.service.easAddress,
       );
 
-      // Send via Privy wallet
-      final result = await widget.wallet.provider.request(
-        EthereumRpcRequest(method: 'eth_sendTransaction', params: [jsonEncode(txRequest)]),
-      );
-
-      String? hash;
-      result.fold(
-        onSuccess: (r) => hash = r.data,
-        onFailure: (e) => throw Exception('Transaction failed: ${e.message}'),
-      );
+      // Send via AppWalletProvider
+      final hash = await context.read<AppWalletProvider>().sendTransaction(txRequest);
 
       if (hash != null) {
         if (mounted) {
@@ -88,7 +78,7 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
         }
         
         // Wait for the UID
-        final uid = await widget.service.waitForAttestationUid(hash!);
+        final uid = await widget.service.waitForAttestationUid(hash);
         if (mounted) setState(() => _uid = uid);
       }
     } catch (e) {
