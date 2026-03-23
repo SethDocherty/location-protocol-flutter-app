@@ -104,9 +104,9 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildVerifyButton(context),
             const SizedBox(height: 24),
 
-            // --- Onchain (Privy Only) ---
-            if (walletProvider.connectionType == ConnectionType.privy) ...[
-              _SectionHeader('Onchain Operations (Privy Only)'),
+            // --- Onchain ---
+            if (walletProvider.canSendTransactions) ...[
+              _SectionHeader('Onchain Operations'),
               _buildOnchainAttestButton(context, walletProvider),
               const SizedBox(height: 8),
               _buildRegisterSchemaButton(context, walletProvider),
