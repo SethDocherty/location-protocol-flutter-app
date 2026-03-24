@@ -65,7 +65,10 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
         contractAddress: widget.service.schemaRegistryAddress,
       );
 
-      final txHash = await context.read<AppWalletProvider>().sendTransaction(txRequest);
+      final txHash = await context.read<AppWalletProvider>().sendTransaction(
+        txRequest,
+        context: context,
+      );
       if (txHash == null) throw Exception('Transaction cancelled or failed');
 
       if (mounted) setState(() => _txHash = txHash);

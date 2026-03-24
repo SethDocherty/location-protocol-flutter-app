@@ -10,3 +10,4 @@
 - Keep RPC precedence logic in `SettingsService` only; any runtime config object should be a snapshot of already-resolved values, not a second resolver.
 - When making RPC routing explicit, update all `AttestationService` constructors in tests and widget helpers together so analyzer output stays clean after the signature change.
 - Prefer a single settings-derived runtime snapshot at the app boundary; refresh it from the owning state object rather than reloading settings inside screens.
+- When a screen submits transactions through `AppWalletProvider`, pass the widget `BuildContext` for external-wallet support; omission can work for embedded wallets but breaks external wallet flows.

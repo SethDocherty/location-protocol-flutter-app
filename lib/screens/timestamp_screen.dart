@@ -64,7 +64,10 @@ class _TimestampScreenState extends State<TimestampScreen> {
       );
 
       if (!mounted) return;
-      final txHash = await context.read<AppWalletProvider>().sendTransaction(txRequest);
+      final txHash = await context.read<AppWalletProvider>().sendTransaction(
+        txRequest,
+        context: context,
+      );
       if (txHash == null) throw Exception('Transaction cancelled or failed');
       final hash = txHash;
 
