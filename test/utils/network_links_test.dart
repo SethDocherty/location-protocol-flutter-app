@@ -24,5 +24,15 @@ void main() {
     test('getExplorerTxUrl returns null for unknown chain', () {
       expect(NetworkLinks.getExplorerTxUrl(999999, '0xdef'), isNull);
     });
+
+    test('getEasScanDomain returns domain for known chain', () {
+      final domain = NetworkLinks.getEasScanDomain(11155111); // Sepolia
+      expect(domain, 'https://sepolia.easscan.org');
+    });
+
+    test('getEasScanDomain returns null for unknown chain', () {
+      final domain = NetworkLinks.getEasScanDomain(999);
+      expect(domain, isNull);
+    });
   });
 }
