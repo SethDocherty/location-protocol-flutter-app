@@ -11,3 +11,5 @@
 - `PrivySigner` connects embedded wallets to the library via `EthereumRpcCaller` callback injections.
 - `ExternalWalletSigner` routes external signature generation (MetaMask, etc.) through application callbacks back into the structured library types.
 - `RuntimeNetworkConfig` is a lightweight immutable snapshot of already-resolved `SettingsService` values; it should not re-implement RPC precedence.
+- `LocationProtocolApp` loads `SettingsService` once and passes a shared `RuntimeNetworkConfig` snapshot into `HomeScreen` for chain/RPC context.
+- `AttestationService` read methods now depend only on the explicit HTTP RPC URL and no longer consult wallet RPC capabilities.
