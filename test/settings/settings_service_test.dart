@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:location_protocol_flutter_app/settings/settings_service.dart';
@@ -6,11 +7,20 @@ void main() {
   group('SettingsService', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
+      dotenv.testLoad(fileInput: '');
     });
 
     test('rpcUrl defaults to empty string', () async {
       final service = await SettingsService.create();
       expect(service.rpcUrl, '');
+    });
+
+    test('rpcUrl uses INFURA_TOKEN from dotenv when present', () async {
+      dotenv.testLoad(fileInput: 'INFURA_TOKEN=test');
+
+      final service = await SettingsService.create();
+
+      expect(service.rpcUrl, 'https://sepolia.infura.io/v3/test');
     });
 
     test('saves and retrieves rpcUrl', () async {
@@ -30,23 +40,22 @@ void main() {
       expect(service.selectedChainId, 1);
     });
 
-    test('privateKeyHex defaults to empty string', () async {
+    test('lastActiveWalletMode defaults to null', () async {
       final service = await SettingsService.create();
-      expect(service.privateKeyHex, '');
+      expect(service.lastActiveWalletMode, isNull);
     });
 
-    test('saves and retrieves privateKeyHex', () async {
+    test('saves, retrieves, and clears lastActiveWalletMode', () async {
       final service = await SettingsService.create();
-      await service.setPrivateKeyHex('abcd1234');
-      expect(service.privateKeyHex, 'abcd1234');
+
+      await service.setLastActiveWalletMode('external');
+      expect(service.lastActiveWalletMode, 'external');
+
+      await service.clearLastActiveWalletMode();
+      expect(service.lastActiveWalletMode, isNull);
     });
 
-    test('clearPrivateKey removes the stored key', () async {
-      final service = await SettingsService.create();
-      await service.setPrivateKeyHex('secret');
-      await service.clearPrivateKey();
-      expect(service.privateKeyHex, '');
-    });
+
 
     test('generates correct Infura URL for Sepolia', () async {
       final service = await SettingsService.create();

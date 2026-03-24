@@ -5,8 +5,7 @@ import 'settings_service.dart';
 
 /// Settings screen for dev/test configuration.
 ///
-/// Allows configuring: RPC URL, chain ID, and a private key for
-/// the private-key onchain path.
+/// Allows configuring: RPC URL and chain ID.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -16,7 +15,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _rpcController = TextEditingController();
-  final _keyController = TextEditingController();
+
   final _infuraKeyController = TextEditingController();
   int _chainId = 11155111;
   bool _loading = true;
@@ -35,7 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _service = service;
       _rpcController.text = service.rpcUrl;
       _infuraKeyController.text = service.infuraApiKey;
-      _keyController.text = service.privateKeyHex;
+
       _chainId = service.selectedChainId;
       _loading = false;
     });
@@ -44,29 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _save() async {
     if (_service == null) return;
 
-    final rawKey = _keyController.text.trim().replaceAll(RegExp(r'\s+'), '');
-    if (rawKey.isNotEmpty) {
-      // Validate key format
-      var checkKey = rawKey;
-      if (checkKey.startsWith('0x')) checkKey = checkKey.substring(2);
 
-      if (checkKey.length != 64 || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(checkKey)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Invalid Private Key (must be a 64-character hex string)',
-              ),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
-        return;
-      }
-      await _service!.setPrivateKeyHex(rawKey);
-    } else {
-      await _service!.clearPrivateKey();
-    }
 
     await _service!.setRpcUrl(_rpcController.text.trim());
     await _service!.setSelectedChainId(_chainId);
@@ -81,9 +58,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _keyController.clear(); // Clear sensitive data
     _rpcController.dispose();
-    _keyController.dispose();
     _infuraKeyController.dispose();
     super.dispose();
   }
@@ -162,17 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       border: const OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _keyController,
-                    decoration: const InputDecoration(
-                      labelText: 'Private Key (hex, for dev/test only)',
-                      hintText: 'ac0974bec39a17e36ba4a6b4d238ff944bacb478...',
-                      border: OutlineInputBorder(),
-                    ),
-                    obscureText: true,
-                    maxLength: 66,
-                  ),
+
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: _save,

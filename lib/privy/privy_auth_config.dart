@@ -108,7 +108,6 @@ class PrivyAuthConfig {
       LoginMethod.google,
       LoginMethod.twitter,
       LoginMethod.discord,
-      LoginMethod.siwe,
     ],
     this.appearance = const PrivyAuthAppearance(),
     this.oauthAppUrlScheme,

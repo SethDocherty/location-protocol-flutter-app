@@ -4,16 +4,52 @@ import 'package:location_protocol/location_protocol.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ReownService {
-  late ReownAppKitModal appKitModal;
+  ReownAppKitModal? _appKitModal;
+
+  static const String appScheme = 'locationprotocol';
+
+  static String resolveRequestChainId({
+    required String? sessionChainId,
+    String? selectedChainId,
+  }) {
+    if (sessionChainId != null && sessionChainId.isNotEmpty) {
+      return sessionChainId;
+    }
+    if (selectedChainId != null && selectedChainId.isNotEmpty) {
+      return selectedChainId;
+    }
+    return 'eip155:11155111';
+  }
+
+  bool get isAvailable => _projectId.isNotEmpty;
+
+  bool get isInitialized => _appKitModal != null;
+
+  String get _projectId {
+    if (!dotenv.isInitialized) return '';
+    return dotenv.env['REOWN_PROJECT_ID'] ?? '';
+  }
+
+  ReownAppKitModal? _modalIfReady() {
+    if (!isAvailable || _appKitModal == null) return null;
+    return _appKitModal;
+  }
+
+  ReownAppKitModal _requireModal() {
+    final modal = _modalIfReady();
+    if (modal == null) {
+      throw StateError('ReownService unavailable');
+    }
+    return modal;
+  }
   
   Future<void> initialize(BuildContext context) async {
     try {
-      final projectId = dotenv.isInitialized ? (dotenv.env['REOWN_PROJECT_ID'] ?? '') : '';
-      if (projectId.isEmpty) return; // Skip in tests or if missing
+      if (!isAvailable || _appKitModal != null) return;
       
-      appKitModal = ReownAppKitModal(
+      final modal = ReownAppKitModal(
         context: context,
-        projectId: projectId,
+        projectId: _projectId,
         metadata: const PairingMetadata(
           name: 'Location Protocol',
           description: 'Sign location attestations',
@@ -21,52 +57,91 @@ class ReownService {
           icons: ['https://decentralizedgeo.org/static/media/logo.4745e76c17791ca44053.jpg'],
           redirect: Redirect(
             native: 'locationprotocol://',
-            universal: 'https://github.com/DecentralizedGeo',
+            linkMode: false,
           ),
         ),
       );
-      await appKitModal.init();
+      await modal.init();
+      _appKitModal = modal;
     } catch (e) {
       debugPrint('Reown initialization error: $e');
     }
   }
 
   Future<String?> connectAndGetAddress() async {
-    if (!appKitModal.isConnected) {
-      await appKitModal.openModalView(); 
+    final modal = _modalIfReady();
+    if (modal == null) {
+      return null;
     }
     
-    if (!appKitModal.isConnected) {
+    if (!modal.isConnected) {
+      await modal.openModalView(); 
+    }
+    
+    if (!modal.isConnected) {
       return null;
     }
 
-    return appKitModal.session!.getAddress('eip155');
+    return modal.session?.getAddress('eip155');
+  }
+
+  Future<String> _syncChainForRequest(
+    ReownAppKitModal modal, {
+    String? targetChainId,
+  }) async {
+    final desiredChainId = targetChainId ?? modal.selectedChain?.chainId;
+    if (desiredChainId == null || desiredChainId.isEmpty) {
+      return resolveRequestChainId(
+        sessionChainId: modal.session?.chainId,
+        selectedChainId: modal.selectedChain?.chainId,
+      );
+    }
+
+    final currentSessionChainId = modal.session?.chainId;
+    if (currentSessionChainId != null && currentSessionChainId != desiredChainId) {
+      final namespace = NamespaceUtils.getNamespaceFromChain(desiredChainId);
+      final chainId = ReownAppKitModalNetworks.getIdFromChain(desiredChainId);
+      final networkInfo = ReownAppKitModalNetworks.getNetworkInfo(namespace, chainId);
+      if (networkInfo != null) {
+        await modal.selectChain(networkInfo, switchChain: true);
+      }
+    }
+
+    return desiredChainId;
   }
 
   String get currentAddress {
-    return appKitModal.session!.getAddress('eip155') ?? '';
+    return _appKitModal?.session?.getAddress('eip155') ?? '';
   }
 
   String get currentChainId {
-    final chainIdStr = appKitModal.selectedChain?.chainId ?? 'eip155:11155111';
+    final chainIdStr = resolveRequestChainId(
+      sessionChainId: _appKitModal?.session?.chainId,
+      selectedChainId: _appKitModal?.selectedChain?.chainId,
+    );
     return chainIdStr.split(':').last;
   }
 
   Future<String> personalSign(BuildContext context, String message) async {
-    if (!appKitModal.isConnected) {
-      await appKitModal.openModalView(); 
+    final modal = _requireModal();
+
+    if (!modal.isConnected) {
+      await modal.openModalView(); 
     }
     
-    if (!appKitModal.isConnected) {
-      throw Exception('User cancelled connection');
+    if (!modal.isConnected) {
+      throw StateError('ReownService unavailable');
     }
 
-    final sessionTopic = appKitModal.session!.topic ?? '';
-    final address = appKitModal.session!.getAddress('eip155') ?? '';
+    final sessionTopic = modal.session?.topic ?? '';
+    final address = modal.session?.getAddress('eip155') ?? '';
     
-    final response = await appKitModal.request(
+    final response = await modal.request(
       topic: sessionTopic,
-      chainId: appKitModal.selectedChain?.chainId ?? 'eip155:11155111',
+      chainId: resolveRequestChainId(
+        sessionChainId: modal.session?.chainId,
+        selectedChainId: modal.selectedChain?.chainId,
+      ),
       request: SessionRequestParams(
         method: 'personal_sign',
         params: [message, address],
@@ -74,27 +149,37 @@ class ReownService {
     );
     
     if (response == null) {
-      throw Exception('Signing cancelled or failed');
+      throw StateError('ReownService unavailable');
     }
     
     return response.toString();
   }
 
-  Future<EIP712Signature> signTypedData(BuildContext context, Map<String, dynamic> typedData) async {
-    if (!appKitModal.isConnected) {
-      await appKitModal.openModalView(); 
+  Future<EIP712Signature> signTypedData(
+    BuildContext context,
+    Map<String, dynamic> typedData, {
+    String? targetChainId,
+  }) async {
+    final modal = _requireModal();
+
+    if (!modal.isConnected) {
+      await modal.openModalView(); 
     }
     
-    if (!appKitModal.isConnected) {
-      throw Exception('User cancelled connection');
+    if (!modal.isConnected) {
+      throw StateError('ReownService unavailable');
     }
 
-    final sessionTopic = appKitModal.session!.topic ?? '';
-    final address = appKitModal.session!.getAddress('eip155') ?? '';
+    final sessionTopic = modal.session?.topic ?? '';
+    final address = modal.session?.getAddress('eip155') ?? '';
+    final chainId = await _syncChainForRequest(
+      modal,
+      targetChainId: targetChainId,
+    );
 
-    final response = await appKitModal.request(
+    final response = await modal.request(
       topic: sessionTopic,
-      chainId: appKitModal.selectedChain?.chainId ?? 'eip155:11155111',
+      chainId: chainId,
       request: SessionRequestParams(
         method: 'eth_signTypedData_v4',
         params: [address, typedData],
@@ -102,9 +187,46 @@ class ReownService {
     );
     
     if (response == null) {
-      throw Exception('Signing cancelled or failed');
+      throw StateError('ReownService unavailable');
     }
     
     return EIP712Signature.fromHex(response.toString());
+  }
+
+  Future<String?> sendTransaction(
+    BuildContext context,
+    Map<String, dynamic> txRequest, {
+    String? targetChainId,
+  }) async {
+    final modal = _requireModal();
+
+    if (!modal.isConnected) {
+      await modal.openModalView(); 
+    }
+    
+    if (!modal.isConnected) {
+      throw StateError('ReownService unavailable');
+    }
+
+    final sessionTopic = modal.session?.topic ?? '';
+    final chainId = await _syncChainForRequest(
+      modal,
+      targetChainId: targetChainId,
+    );
+
+    final response = await modal.request(
+      topic: sessionTopic,
+      chainId: chainId,
+      request: SessionRequestParams(
+        method: 'eth_sendTransaction',
+        params: [txRequest],
+      ),
+    );
+    
+    if (response == null) {
+      throw StateError('ReownService unavailable');
+    }
+    
+    return response.toString();
   }
 }

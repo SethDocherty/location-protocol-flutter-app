@@ -1,8 +1,9 @@
-import 'dart:convert';
+
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:privy_flutter/privy_flutter.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_wallet_provider.dart';
 
 import '../protocol/attestation_service.dart';
 import '../protocol/schema_config.dart';
@@ -11,12 +12,9 @@ import '../utils/network_links.dart';
 /// Screen for registering the app's EAS schema onchain.
 class RegisterSchemaScreen extends StatefulWidget {
   final AttestationService service;
-  final EmbeddedEthereumWallet wallet;
-
   const RegisterSchemaScreen({
     super.key,
     required this.service,
-    required this.wallet,
   });
 
   @override
@@ -67,18 +65,11 @@ class _RegisterSchemaScreenState extends State<RegisterSchemaScreen> {
         contractAddress: widget.service.schemaRegistryAddress,
       );
 
-      final result = await widget.wallet.provider.request(
-        EthereumRpcRequest(
-          method: 'eth_sendTransaction',
-          params: [jsonEncode(txRequest)],
-        ),
+      final txHash = await context.read<AppWalletProvider>().sendTransaction(
+        txRequest,
+        context: context,
       );
-
-      late String txHash;
-      result.fold(
-        onSuccess: (r) => txHash = r.data,
-        onFailure: (e) => throw Exception('Transaction failed: ${e.message}'),
-      );
+      if (txHash == null) throw Exception('Transaction cancelled or failed');
 
       if (mounted) setState(() => _txHash = txHash);
 

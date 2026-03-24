@@ -1,7 +1,8 @@
-import 'dart:convert';
+
 
 import 'package:flutter/material.dart';
-import 'package:privy_flutter/privy_flutter.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_wallet_provider.dart';
 
 import '../protocol/attestation_service.dart';
 import '../utils/network_links.dart';
@@ -9,12 +10,9 @@ import '../utils/network_links.dart';
 /// Screen for timestamping an offchain attestation UID onchain.
 class TimestampScreen extends StatefulWidget {
   final AttestationService service;
-  final EmbeddedEthereumWallet wallet;
-
   const TimestampScreen({
     super.key,
     required this.service,
-    required this.wallet,
   });
 
   @override
@@ -65,23 +63,15 @@ class _TimestampScreenState extends State<TimestampScreen> {
         contractAddress: widget.service.easAddress,
       );
 
-      final result = await widget.wallet.provider.request(
-        EthereumRpcRequest(method: 'eth_sendTransaction', params: [jsonEncode(txRequest)]),
+      if (!mounted) return;
+      final txHash = await context.read<AppWalletProvider>().sendTransaction(
+        txRequest,
+        context: context,
       );
+      if (txHash == null) throw Exception('Transaction cancelled or failed');
+      final hash = txHash;
 
-      String? hash;
-      result.fold(
-        onSuccess: (r) => hash = r.data,
-        onFailure: (e) {
-          final message = e.message;
-          if (message.contains('0x2e267946') || message.contains('.&yF')) {
-             throw Exception('This UID has already been timestamped onchain.');
-          }
-          throw Exception('Transaction failed: $message');
-        },
-      );
-
-      if (mounted && hash != null) setState(() => _txHash = hash);
+      if (mounted) setState(() => _txHash = hash);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {

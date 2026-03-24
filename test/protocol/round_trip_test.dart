@@ -14,6 +14,7 @@ void main() {
     service = AttestationService(
       signer: LocalKeySigner(privateKeyHex: _testPrivateKey),
       chainId: 11155111,
+      rpcUrl: 'https://unused.rpc',
     );
   });
 

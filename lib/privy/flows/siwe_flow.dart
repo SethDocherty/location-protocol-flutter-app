@@ -5,10 +5,10 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:privy_flutter/privy_flutter.dart';
-import 'package:on_chain/on_chain.dart';
 import '../privy_auth_config.dart';
 import '../privy_manager.dart';
 import '../../services/reown_service.dart';
+import 'package:provider/provider.dart';
 
 /// SIWE login flow — automatic connection and signature request via WalletConnect.
 class SiweFlow extends StatefulWidget {
@@ -33,13 +33,14 @@ class SiweFlow extends StatefulWidget {
 }
 
 class _SiweFlowState extends State<SiweFlow> {
-  final ReownService _reownService = ReownService();
+  late final ReownService _reownService;
   bool _loading = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _reownService = context.read<ReownService>();
     _reownService.initialize(context);
   }
 
@@ -59,9 +60,7 @@ class _SiweFlowState extends State<SiweFlow> {
         return;
       }
       
-      // EIP-4361 strictly requires an EIP-55 checksummed address.
-      // WalletConnect returns lowercase, so we checksum it using blockchain_utils.
-      final checksummedAddress = ETHAddress(address).address;
+      final checksummedAddress = address;
 
       final params = SiweMessageParams(
         appDomain: widget.config.siweAppDomain,

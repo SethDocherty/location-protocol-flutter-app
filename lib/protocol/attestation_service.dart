@@ -1,10 +1,10 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:location_protocol/location_protocol.dart';
 
-import 'privy_signer.dart';
 import 'schema_config.dart';
 
 /// Orchestrates all protocol operations for the app.
@@ -15,7 +15,7 @@ import 'schema_config.dart';
 class AttestationService {
   final Signer signer;
   final int chainId;
-  final String? fallbackRpcUrl;
+  final String rpcUrl;
   final http.Client? _httpClient;
   final String _easAddress;
   final OffchainSigner _offchainSigner;
@@ -24,7 +24,7 @@ class AttestationService {
   AttestationService({
     required this.signer,
     required this.chainId,
-    this.fallbackRpcUrl,
+    required this.rpcUrl,
     this.sponsorGas = false,
     http.Client? httpClient,
   })  : _httpClient = httpClient,
@@ -169,7 +169,7 @@ class AttestationService {
       {'to': schemaRegistryAddress, 'data': callData},
       'latest'
     ]);
-    print('AttestationService: getSchemaRecord result: $result');
+    developer.log('AttestationService: getSchemaRecord result: $result');
     return result;
   }
 
@@ -212,59 +212,40 @@ class AttestationService {
 
   /// Performs an RPC call, falling back to HTTP if the signer's provider fails.
   Future<String> _rpcCall(String method, List<dynamic> params) async {
-    // 1. Try wallet signer first (if it supports generic RPC)
-    if (signer is PrivySigner) {
-      try {
-        final result = await (signer as PrivySigner).rpcCall(method, params);
-        return result;
-      } catch (e) {
-        print('AttestationService: Wallet RPC failed for $method: $e');
-        // Fall back to HTTP if method is unsupported or other wallet error
-        if (fallbackRpcUrl == null || fallbackRpcUrl!.isEmpty) {
-          print('AttestationService: No fallback RPC URL configured.');
-          throw UnsupportedError(
-            'Read-only checks (eth_call) are not supported by the current wallet. '
-            'Please configure an RPC URL in Settings to enable onchain status verification.',
-          );
-        }
-        print('AttestationService: Falling back to HTTP RPC: $fallbackRpcUrl');
-      }
+    if (rpcUrl.isEmpty) {
+      throw UnsupportedError(
+        'Read-only checks require an RPC URL in Settings.',
+      );
     }
 
-    // 2. Fallback to direct HTTP RPC
-    if (fallbackRpcUrl != null && fallbackRpcUrl!.isNotEmpty) {
-      final client = _httpClient ?? http.Client();
-      try {
-        final response = await client.post(
-          Uri.parse(fallbackRpcUrl!),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'jsonrpc': '2.0',
-            'id': DateTime.now().millisecondsSinceEpoch,
-            'method': method,
-            'params': params,
-          }),
-        );
+    final client = _httpClient ?? http.Client();
+    try {
+      final response = await client.post(
+        Uri.parse(rpcUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'jsonrpc': '2.0',
+          'id': DateTime.now().millisecondsSinceEpoch,
+          'method': method,
+          'params': params,
+        }),
+      );
 
-        if (response.statusCode != 200) {
-          throw Exception('Fallback RPC failed: ${response.statusCode}');
-        }
-
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        if (data.containsKey('error')) {
-          throw Exception('RPC Error: ${data['error']['message']}');
-        }
-
-        final result = data['result'];
-        if (result == null) return 'null';
-        if (result is String) return result;
-        return jsonEncode(result);
-      } finally {
-        // Only close the client if we created it locally
-        if (_httpClient == null) client.close();
+      if (response.statusCode != 200) {
+        throw Exception('RPC failed: ${response.statusCode}');
       }
-    }
 
-    throw UnsupportedError('No RPC provider available for $method');
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data.containsKey('error')) {
+        throw Exception('RPC Error: ${data['error']['message']}');
+      }
+
+      final result = data['result'];
+      if (result == null) return 'null';
+      if (result is String) return result;
+      return jsonEncode(result);
+    } finally {
+      if (_httpClient == null) client.close();
+    }
   }
 }
