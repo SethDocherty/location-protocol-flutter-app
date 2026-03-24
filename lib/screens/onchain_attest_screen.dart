@@ -68,7 +68,10 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
       );
 
       // Send via AppWalletProvider
-      final hash = await context.read<AppWalletProvider>().sendTransaction(txRequest);
+      final hash = await context.read<AppWalletProvider>().sendTransaction(
+        txRequest,
+        context: context,
+      );
 
       if (hash != null) {
         if (mounted) {

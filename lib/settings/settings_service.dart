@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Persists dev/test settings via SharedPreferences.
@@ -40,6 +41,12 @@ class SettingsService {
 
   SettingsService._(this._prefs);
 
+  String? _env(String key) {
+    if (!dotenv.isInitialized) return null;
+    final value = dotenv.env[key];
+    return value != null && value.isNotEmpty ? value : null;
+  }
+
   /// Creates a [SettingsService] backed by SharedPreferences.
   static Future<SettingsService> create() async {
     final prefs = await SharedPreferences.getInstance();
@@ -47,6 +54,9 @@ class SettingsService {
   }
 
   String get rpcUrl {
+    final envRpcUrl = _env('RPC_URL');
+    if (envRpcUrl != null && envRpcUrl.isNotEmpty) return envRpcUrl;
+
     final infura = infuraRpcUrl;
     if (infura != null) return infura;
     return _prefs.getString(_keyRpcUrl) ?? '';
@@ -59,7 +69,7 @@ class SettingsService {
   Future<void> setSelectedChainId(int chainId) =>
       _prefs.setInt(_keyChainId, chainId);
 
-  String get infuraApiKey => _prefs.getString(_keyInfuraApiKey) ?? '';
+  String get infuraApiKey => _env('INFURA_TOKEN') ?? _prefs.getString(_keyInfuraApiKey) ?? '';
 
   Future<void> setInfuraApiKey(String key) =>
       _prefs.setString(_keyInfuraApiKey, key);

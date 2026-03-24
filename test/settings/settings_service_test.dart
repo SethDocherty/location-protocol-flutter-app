@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:location_protocol_flutter_app/settings/settings_service.dart';
@@ -6,11 +7,20 @@ void main() {
   group('SettingsService', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
+      dotenv.testLoad(fileInput: '');
     });
 
     test('rpcUrl defaults to empty string', () async {
       final service = await SettingsService.create();
       expect(service.rpcUrl, '');
+    });
+
+    test('rpcUrl uses INFURA_TOKEN from dotenv when present', () async {
+      dotenv.testLoad(fileInput: 'INFURA_TOKEN=test');
+
+      final service = await SettingsService.create();
+
+      expect(service.rpcUrl, 'https://sepolia.infura.io/v3/test');
     });
 
     test('saves and retrieves rpcUrl', () async {
