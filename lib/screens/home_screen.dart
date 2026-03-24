@@ -14,7 +14,6 @@ import 'onchain_attest_screen.dart';
 import 'register_schema_screen.dart';
 import 'timestamp_screen.dart';
 import '../settings/settings_screen.dart';
-import '../settings/settings_service.dart';
 
 
 /// Main screen — auth-gated navigation hub for all attestation operations.

@@ -38,6 +38,7 @@ class FakeOnchainAttestationService extends AttestationService {
       : super(
           signer: LocalKeySigner(privateKeyHex: _testPrivateKey),
           chainId: 11155111,
+          rpcUrl: 'https://unused.rpc',
         );
 
   @override
