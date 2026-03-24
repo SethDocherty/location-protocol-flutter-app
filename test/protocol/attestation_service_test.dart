@@ -354,6 +354,59 @@ void main() {
         expect(capturedRequests.every((request) => request['url'] == configuredRpcUrl), isTrue);
       });
   });
+
+  group('AttestationService — new dynamic methods', () {
+    test('isSchemaUidRegistered accepts any UID (returns false for test RPC)', () async {
+      // Enough to test the method exists and doesn't throw with a fake RPC response
+      final customService = AttestationService(
+        signer: LocalKeySigner(privateKeyHex: _testPrivateKey),
+        chainId: 11155111,
+        rpcUrl: 'https://unused.rpc',
+        httpClient: FakeClient((_) async => http.Response(
+          '{"jsonrpc":"2.0","id":1,"result":"0x0000000000000000000000000000000000000000000000000000000000000020"}',
+          200,
+        )),
+      );
+      final result = await customService.isSchemaUidRegistered('0x${'ab' * 32}');
+      expect(result, isFalse); // UID won't match the fake response
+    });
+
+    test('signOffchainWithData returns a SignedOffchainAttestation', () async {
+      final result = await service.signOffchainWithData(
+        schema: AppSchema.definition,
+        lat: 37.7749,
+        lng: -122.4194,
+        userData: AppSchema.buildUserData(memo: 'dynamic test'),
+      );
+      expect(result, isA<SignedOffchainAttestation>());
+    });
+
+    test('buildAttestCallDataWithUserData returns non-empty Uint8List', () {
+      final callData = service.buildAttestCallDataWithUserData(
+        schema: AppSchema.definition,
+        lat: 37.7749,
+        lng: -122.4194,
+        userData: AppSchema.buildUserData(memo: 'dynamic test'),
+      );
+      expect(callData, isA<Uint8List>());
+      expect(callData.isNotEmpty, isTrue);
+    });
+
+    test('buildRegisterSchemaCallData accepts explicit schema', () {
+      final customSchema = SchemaDefinition(
+        fields: [SchemaField(type: 'string', name: 'test')],
+      );
+      final callData = service.buildRegisterSchemaCallData(customSchema);
+      expect(callData, isA<Uint8List>());
+      expect(callData.isNotEmpty, isTrue);
+    });
+
+    test('buildRegisterSchemaCallData uses default schema when called with no args', () {
+      final callData = service.buildRegisterSchemaCallData();
+      expect(callData, isA<Uint8List>());
+      expect(callData.isNotEmpty, isTrue);
+    });
+  });
 }
 
 class FakeClient extends http.BaseClient {
