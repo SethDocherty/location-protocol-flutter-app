@@ -149,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final service = AttestationService(
           signer: signer,
           chainId: _chainId,
-          fallbackRpcUrl: _rpcUrl,
+          rpcUrl: _rpcUrl ?? '',
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
@@ -177,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final service = AttestationService(
           signer: dummySigner,
           chainId: _chainId,
-          fallbackRpcUrl: _rpcUrl,
+          rpcUrl: _rpcUrl ?? '',
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
@@ -198,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final service = AttestationService(
           signer: signer,
           chainId: _chainId,
-          fallbackRpcUrl: _rpcUrl,
+          rpcUrl: _rpcUrl ?? '',
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
@@ -221,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final service = AttestationService(
           signer: signer,
           chainId: _chainId,
-          fallbackRpcUrl: _rpcUrl,
+          rpcUrl: _rpcUrl ?? '',
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
@@ -244,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final service = AttestationService(
           signer: signer,
           chainId: _chainId,
-          fallbackRpcUrl: _rpcUrl,
+          rpcUrl: _rpcUrl ?? '',
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(

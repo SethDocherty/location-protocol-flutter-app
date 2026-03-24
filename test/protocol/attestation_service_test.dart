@@ -21,6 +21,7 @@ void main() {
     service = AttestationService(
       signer: signer,
       chainId: 11155111, // Sepolia
+      rpcUrl: 'https://unused.rpc',
     );
   });
 
@@ -202,6 +203,7 @@ void main() {
       final sponsorService = AttestationService(
         signer: signer,
         chainId: 11155111,
+        rpcUrl: 'https://unused.rpc',
         sponsorGas: true,
       );
 
@@ -225,185 +227,132 @@ void main() {
   });
 
   group('AttestationService — RPC checks', () {
-    late AttestationService rpcService;
-    late PrivySigner privySigner;
-    String? capturedMethod;
+      late AttestationService rpcService;
+      late PrivySigner privySigner;
+      late String configuredRpcUrl;
+      late int signerRpcCalls;
+      late List<Map<String, dynamic>> capturedRequests;
 
-    test('isSchemaRegistered returns true when UID is non-zero', () async {
-      privySigner = PrivySigner(
-        walletAddress: _testAddress,
-        rpcCaller: (method, params) async {
-          capturedMethod = method;
-          // Return the real UID (first 32 bytes) to match strict check
-          return AppSchema.schemaUID;
-        },
-      );
-      rpcService = AttestationService(signer: privySigner, chainId: 1);
+      setUp(() {
+        signerRpcCalls = 0;
+        capturedRequests = [];
+        configuredRpcUrl = 'https://configured.rpc';
+      });
 
-      final result = await rpcService.isSchemaRegistered();
-      expect(result, isTrue);
-      expect(capturedMethod, 'eth_call');
-    });
+      PrivySigner buildFailingSigner() {
+        return PrivySigner(
+          walletAddress: _testAddress,
+          rpcCaller: (method, params) async {
+            signerRpcCalls++;
+            throw Exception('Signer RPC should not be used for read paths');
+          },
+        );
+      }
 
-    test('isSchemaRegistered returns false when UID is zero', () async {
-      privySigner = PrivySigner(
-        walletAddress: _testAddress,
-        rpcCaller: (method, params) async {
-          capturedMethod = method;
-          // Return zero UID
-          return '0x${'00' * 32}';
-        },
-      );
-      rpcService = AttestationService(signer: privySigner, chainId: 1);
+      http.BaseClient buildClient(String responseBody) {
+        return FakeClient((request) async {
+          final body = request is http.Request ? request.body : '';
+          capturedRequests.add({
+            'url': request.url.toString(),
+            'body': body,
+          });
+          return http.Response(responseBody, 200);
+        });
+      }
 
-      final result = await rpcService.isSchemaRegistered();
-      expect(result, isFalse);
-    });
+      test('getSchemaRecord uses the configured RPC URL', () async {
+        privySigner = buildFailingSigner();
+        rpcService = AttestationService(
+          signer: privySigner,
+          chainId: 1,
+          rpcUrl: configuredRpcUrl,
+          httpClient: buildClient(
+            '{"jsonrpc":"2.0","id":1,"result":"${AppSchema.schemaUID}"}',
+          ),
+        );
 
-    test('getTransactionReceipt returns decoded map', () async {
-      privySigner = PrivySigner(
-        walletAddress: _testAddress,
-        rpcCaller: (method, params) async {
-          capturedMethod = method;
-          return '{"blockNumber": "0x1", "status": "0x1"}';
-        },
-      );
-      rpcService = AttestationService(signer: privySigner, chainId: 1);
+        final result = await rpcService.getSchemaRecord(AppSchema.schemaUID);
 
-      final receipt = await rpcService.getTransactionReceipt('0x123');
-      expect(receipt, isA<Map<String, dynamic>>());
-      expect(receipt!['blockNumber'], '0x1');
-      expect(capturedMethod, 'eth_getTransactionReceipt');
-    });
+        expect(result, AppSchema.schemaUID);
+        expect(signerRpcCalls, 0);
+        expect(capturedRequests, hasLength(1));
+        expect(capturedRequests.single['url'], configuredRpcUrl);
+        expect(capturedRequests.single['body'], contains('"method":"eth_call"'));
+      });
 
-    test('getTransactionReceipt returns null for empty/null response', () async {
-      privySigner = PrivySigner(
-        walletAddress: _testAddress,
-        rpcCaller: (method, params) async => 'null',
-      );
-      rpcService = AttestationService(signer: privySigner, chainId: 1);
+      test('getTimestamp uses the configured RPC URL', () async {
+        privySigner = buildFailingSigner();
+        rpcService = AttestationService(
+          signer: privySigner,
+          chainId: 1,
+          rpcUrl: configuredRpcUrl,
+          httpClient: buildClient(
+            '{"jsonrpc":"2.0","id":1,"result":"0x1234"}',
+          ),
+        );
 
-      final receipt = await rpcService.getTransactionReceipt('0x123');
-      expect(receipt, isNull);
-    });
-    test('isSchemaRegistered throws UnsupportedError if fallback missing', () async {
-      privySigner = PrivySigner(
-        walletAddress: _testAddress,
-        rpcCaller: (method, params) async => throw Exception('Unsupported'),
-      );
-      rpcService = AttestationService(signer: privySigner, chainId: 1);
+        final result = await rpcService.getTimestamp('0x${'ab' * 32}');
 
-      expect(
-        rpcService.isSchemaRegistered(),
-        throwsA(isA<UnsupportedError>().having(
-          (e) => e.message,
-          'message',
-          contains('Please configure an RPC URL in Settings'),
-        )),
-      );
-    });
-    test('waitForAttestationUid polls and returns uid', () async {
-      int pollCount = 0;
-      privySigner = PrivySigner(
-        walletAddress: '0x123',
-        rpcCaller: (method, params) async {
-          if (method == 'eth_getTransactionReceipt') {
-            pollCount++;
-            if (pollCount < 2) return 'null';
-            // Return receipt on second poll, returning the UID in data
-            return '''
-            {
-              "logs": [
-                {
-                  "address": "${rpcService.easAddress}",
-                  "data": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-                }
-              ]
+        expect(result, '0x1234');
+        expect(signerRpcCalls, 0);
+        expect(capturedRequests.single['url'], configuredRpcUrl);
+        expect(capturedRequests.single['body'], contains('"method":"eth_call"'));
+      });
+
+      test('getTransactionReceipt uses the configured RPC URL', () async {
+        privySigner = buildFailingSigner();
+        rpcService = AttestationService(
+          signer: privySigner,
+          chainId: 1,
+          rpcUrl: configuredRpcUrl,
+          httpClient: buildClient(
+            '{"jsonrpc":"2.0","id":1,"result":{"blockNumber":"0x1","status":"0x1"}}',
+          ),
+        );
+
+        final receipt = await rpcService.getTransactionReceipt('0x123');
+
+        expect(receipt, isA<Map<String, dynamic>>());
+        expect(receipt!['blockNumber'], '0x1');
+        expect(signerRpcCalls, 0);
+        expect(capturedRequests.single['url'], configuredRpcUrl);
+        expect(capturedRequests.single['body'], contains('"method":"eth_getTransactionReceipt"'));
+      });
+
+      test('waitForAttestationUid succeeds through the configured RPC URL', () async {
+        int pollCount = 0;
+        privySigner = buildFailingSigner();
+        rpcService = AttestationService(
+          signer: privySigner,
+          chainId: 11155111,
+          rpcUrl: configuredRpcUrl,
+          httpClient: FakeClient((request) async {
+            final body = request is http.Request ? request.body : '';
+            capturedRequests.add({
+              'url': request.url.toString(),
+              'body': body,
+            });
+            if (pollCount++ < 1) {
+              return http.Response('{"jsonrpc":"2.0","id":1,"result":null}', 200);
             }
-            ''';
-          }
-          return 'null';
-        },
-      );
-      rpcService = AttestationService(signer: privySigner, chainId: 11155111);
+            return http.Response(
+              '{"jsonrpc":"2.0","id":1,"result":{"logs":[{"address":"${rpcService.easAddress}","data":"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"}]}}',
+              200,
+            );
+          }),
+        );
 
-      final uid = await rpcService.waitForAttestationUid(
-        '0xtx',
-        pollInterval: const Duration(milliseconds: 1), // Fast for tests
-      );
-
-      expect(pollCount, 2);
-      expect(uid, '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef');
-    });
-
-    test('waitForAttestationUid throws if no logs match', () async {
-      privySigner = PrivySigner(
-        walletAddress: '0x123',
-        rpcCaller: (method, params) async {
-          if (method == 'eth_getTransactionReceipt') {
-            return '{"logs": []}';
-          }
-          return 'null';
-        },
-      );
-      rpcService = AttestationService(signer: privySigner, chainId: 11155111);
-
-      expect(
-        () => rpcService.waitForAttestationUid(
+        final uid = await rpcService.waitForAttestationUid(
           '0xtx',
           pollInterval: const Duration(milliseconds: 1),
-        ),
-        throwsException,
-      );
-    });
-  });
-
-  group('AttestationService — HTTP Fallback', () {
-    test('falls back to HTTP when signer throws Unsupported method', () async {
-      final privySigner = PrivySigner(
-        walletAddress: _testAddress,
-        rpcCaller: (method, params) async =>
-            throw Exception('Unsupported method: eth_call'),
-      );
-
-      final fakeClient = FakeClient((request) async {
-        return http.Response(
-          '{"jsonrpc":"2.0","id":1,"result":"${AppSchema.schemaUID}"}',
-          200,
         );
+
+        expect(uid, '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef');
+        expect(signerRpcCalls, 0);
+        expect(pollCount, 2);
+        expect(capturedRequests, hasLength(2));
+        expect(capturedRequests.every((request) => request['url'] == configuredRpcUrl), isTrue);
       });
-
-      final service = AttestationService(
-        signer: privySigner,
-        chainId: 1,
-        fallbackRpcUrl: 'https://fallback.rpc',
-        httpClient: fakeClient,
-      );
-
-      final result = await service.isSchemaRegistered();
-      expect(result, isTrue);
-    });
-
-    test('bubbles up HTTP errors from fallback', () async {
-      final privySigner = PrivySigner(
-        walletAddress: _testAddress,
-        rpcCaller: (method, params) async =>
-            throw Exception('Unsupported method'),
-      );
-
-      final fakeClient = FakeClient((request) async {
-        return http.Response('Internal Server Error', 500);
-      });
-
-      final service = AttestationService(
-        signer: privySigner,
-        chainId: 1,
-        fallbackRpcUrl: 'https://fallback.rpc',
-        httpClient: fakeClient,
-      );
-
-      expect(service.isSchemaRegistered(), throwsA(isA<Exception>()));
-    });
   });
 }
 
