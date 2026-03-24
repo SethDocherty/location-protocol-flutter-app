@@ -6,6 +6,7 @@ import '../protocol/protocol_module.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_wallet_provider.dart';
+import '../services/runtime_network_config.dart';
 
 import 'sign_screen.dart';
 import 'verify_screen.dart';
@@ -18,32 +19,20 @@ import '../settings/settings_service.dart';
 
 /// Main screen — auth-gated navigation hub for all attestation operations.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final RuntimeNetworkConfig runtimeNetworkConfig;
+  final Future<void> Function()? onSettingsChanged;
+
+  const HomeScreen({
+    super.key,
+    required this.runtimeNetworkConfig,
+    this.onSettingsChanged,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _chainId = 11155111; // default until settings load
-  String? _rpcUrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final settings = await SettingsService.create();
-    if (mounted) {
-      setState(() {
-        _chainId = settings.selectedChainId;
-        _rpcUrl = settings.rpcUrl;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final walletProvider = context.watch<AppWalletProvider>();
@@ -67,8 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
               await Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SettingsScreen()),
               );
-              // Reload settings in case the user changed them.
-              if (mounted) _loadSettings();
+              if (mounted) await widget.onSettingsChanged?.call();
             },
           ),
           if (walletProvider.connectionType != ConnectionType.none)
@@ -137,7 +125,10 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
 
-        final signer = walletProvider.getSigner(context, _chainId);
+        final signer = walletProvider.getSigner(
+          context,
+          widget.runtimeNetworkConfig.selectedChainId,
+        );
         if (signer == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Could not initialize signer')),
@@ -148,8 +139,8 @@ class _HomeScreenState extends State<HomeScreen> {
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
-          chainId: _chainId,
-          rpcUrl: _rpcUrl ?? '',
+          chainId: widget.runtimeNetworkConfig.selectedChainId,
+          rpcUrl: widget.runtimeNetworkConfig.rpcUrl,
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
@@ -176,8 +167,8 @@ class _HomeScreenState extends State<HomeScreen> {
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: dummySigner,
-          chainId: _chainId,
-          rpcUrl: _rpcUrl ?? '',
+          chainId: widget.runtimeNetworkConfig.selectedChainId,
+          rpcUrl: widget.runtimeNetworkConfig.rpcUrl,
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
@@ -192,13 +183,16 @@ class _HomeScreenState extends State<HomeScreen> {
       icon: Icons.cloud_upload,
       label: 'Attest Onchain',
       onPressed: () {
-        final signer = walletProvider.getSigner(context, _chainId);
+        final signer = walletProvider.getSigner(
+          context,
+          widget.runtimeNetworkConfig.selectedChainId,
+        );
         if (signer == null) return;
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
-          chainId: _chainId,
-          rpcUrl: _rpcUrl ?? '',
+          chainId: widget.runtimeNetworkConfig.selectedChainId,
+          rpcUrl: widget.runtimeNetworkConfig.rpcUrl,
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
@@ -215,13 +209,16 @@ class _HomeScreenState extends State<HomeScreen> {
       icon: Icons.app_registration,
       label: 'Register Schema',
       onPressed: () {
-        final signer = walletProvider.getSigner(context, _chainId);
+        final signer = walletProvider.getSigner(
+          context,
+          widget.runtimeNetworkConfig.selectedChainId,
+        );
         if (signer == null) return;
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
-          chainId: _chainId,
-          rpcUrl: _rpcUrl ?? '',
+          chainId: widget.runtimeNetworkConfig.selectedChainId,
+          rpcUrl: widget.runtimeNetworkConfig.rpcUrl,
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(
@@ -238,13 +235,16 @@ class _HomeScreenState extends State<HomeScreen> {
       icon: Icons.access_time,
       label: 'Timestamp Offchain UID',
       onPressed: () {
-        final signer = walletProvider.getSigner(context, _chainId);
+        final signer = walletProvider.getSigner(
+          context,
+          widget.runtimeNetworkConfig.selectedChainId,
+        );
         if (signer == null) return;
         final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
         final service = AttestationService(
           signer: signer,
-          chainId: _chainId,
-          rpcUrl: _rpcUrl ?? '',
+          chainId: widget.runtimeNetworkConfig.selectedChainId,
+          rpcUrl: widget.runtimeNetworkConfig.rpcUrl,
           sponsorGas: isSponsored,
         );
         Navigator.of(context).push(

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:location_protocol_flutter_app/providers/app_wallet_provider.dart';
 import 'package:location_protocol_flutter_app/screens/home_screen.dart';
 import 'package:location_protocol_flutter_app/services/reown_service.dart';
+import 'package:location_protocol_flutter_app/services/runtime_network_config.dart';
 import 'package:location_protocol_flutter_app/settings/settings_service.dart';
 import 'package:location_protocol_flutter_app/privy/privy_auth_provider.dart';
 import 'package:privy_flutter/privy_flutter.dart';
@@ -61,7 +62,12 @@ Widget _buildApp(AppWalletProvider walletProvider) {
   return ChangeNotifierProvider<AppWalletProvider>.value(
     value: walletProvider,
     child: MaterialApp(
-      home: const HomeScreen(),
+      home: const HomeScreen(
+        runtimeNetworkConfig: RuntimeNetworkConfig(
+          selectedChainId: 11155111,
+          rpcUrl: 'https://rpc.example.com',
+        ),
+      ),
     ),
   );
 }
