@@ -11,7 +11,7 @@ import '../services/runtime_network_config.dart';
 import 'sign_screen.dart';
 import 'verify_screen.dart';
 import 'onchain_attest_screen.dart';
-import 'register_schema_screen.dart';
+import 'schema_manager_screen.dart';
 import 'timestamp_screen.dart';
 import '../settings/settings_screen.dart';
 
@@ -84,19 +84,23 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
             ],
 
-            // --- Always available ---
-            _SectionHeader('Offchain Operations'),
-            _buildSignOffchainButton(context, walletProvider),
-            const SizedBox(height: 8),
-            _buildVerifyButton(context),
+            // --- Schema Manager (always available) ---
+            _buildSchemaManagerButton(context, walletProvider),
             const SizedBox(height: 24),
+
+            // --- Offchain ---
+            if (walletProvider.isConnected) ...[
+              _SectionHeader('Offchain Operations'),
+              _buildSignOffchainButton(context, walletProvider),
+              const SizedBox(height: 8),
+              _buildVerifyButton(context),
+              const SizedBox(height: 24),
+            ],
 
             // --- Onchain ---
             if (walletProvider.canSendTransactions) ...[
               _SectionHeader('Onchain Operations'),
               _buildOnchainAttestButton(context, walletProvider),
-              const SizedBox(height: 8),
-              _buildRegisterSchemaButton(context, walletProvider),
               const SizedBox(height: 8),
               _buildTimestampButton(context, walletProvider),
             ],
@@ -148,8 +152,6 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
-
-
 
   Widget _buildVerifyButton(BuildContext context) {
     // Create a dummy service for verification (signer not used for verify)
@@ -203,26 +205,29 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildRegisterSchemaButton(BuildContext context, AppWalletProvider walletProvider) {
+  Widget _buildSchemaManagerButton(BuildContext context, AppWalletProvider walletProvider) {
     return _ActionButton(
-      icon: Icons.app_registration,
-      label: 'Register Schema',
+      icon: Icons.schema,
+      label: 'Schema Manager',
       onPressed: () {
         final signer = walletProvider.getSigner(
           context,
           widget.runtimeNetworkConfig.selectedChainId,
         );
-        if (signer == null) return;
-        final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
-        final service = AttestationService(
-          signer: signer,
-          chainId: widget.runtimeNetworkConfig.selectedChainId,
-          rpcUrl: widget.runtimeNetworkConfig.rpcUrl,
-          sponsorGas: isSponsored,
-        );
+        // service can be null if not logged in, SchemaManager handles it
+        AttestationService? service;
+        if (signer != null) {
+          final isSponsored = dotenv.env['GAS_SPONSORSHIP']?.toLowerCase() == 'true';
+          service = AttestationService(
+            signer: signer,
+            chainId: widget.runtimeNetworkConfig.selectedChainId,
+            rpcUrl: widget.runtimeNetworkConfig.rpcUrl,
+            sponsorGas: isSponsored,
+          );
+        }
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => RegisterSchemaScreen(service: service),
+            builder: (_) => SchemaManagerScreen(service: service),
           ),
         );
       },

@@ -238,7 +238,15 @@ class _SchemaManagerScreenState extends State<SchemaManagerScreen> {
   }
 
   Widget _buildEasScanSection(SchemaProvider provider) {
-    if (_userSchemas.isEmpty && !_loadingSchemas) return const SizedBox.shrink();
+    // Show a slim loading bar independently while fetching, without
+    // rendering an empty dropdown that flashes and then disappears.
+    if (_userSchemas.isEmpty) {
+      if (!_loadingSchemas) return const SizedBox.shrink();
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 8),
+        child: LinearProgressIndicator(),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,11 +271,6 @@ class _SchemaManagerScreenState extends State<SchemaManagerScreen> {
             }
           },
         ),
-        if (_loadingSchemas)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: LinearProgressIndicator(),
-          ),
       ],
     );
   }
