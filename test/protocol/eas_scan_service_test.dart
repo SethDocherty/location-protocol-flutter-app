@@ -26,8 +26,8 @@ void main() {
           )).thenAnswer((_) async => http.Response(
             jsonEncode({
               'data': {
-                'schemas': [
-                  {'id': '0xabc', 'schema': 'string memo', 'index': 42},
+                'schemata': [
+                  {'id': '0xabc', 'schema': 'string memo', 'index': '42'},
                 ],
               },
             }),
@@ -82,5 +82,34 @@ void main() {
         throwsException,
       );
     });
+  });
+
+  test('queryUserSchemas checksums lowercase address before querying', () async {
+    String? capturedBody;
+    when(() => mockClient.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        )).thenAnswer((invocation) async {
+      capturedBody = invocation.namedArguments[const Symbol('body')] as String;
+      return http.Response(
+        jsonEncode({'data': {'schemata': []}}),
+        200,
+      );
+    });
+
+    final service = EasScanService(
+      graphqlEndpoint: 'https://base-sepolia.easscan.org/graphql',
+      client: mockClient,
+    );
+
+    // Pass lowercase address — the API requires the checksummed form.
+    await service.queryUserSchemas('0x3074c8732366ce5db80986aba8fb69897872ddb9');
+
+    final body = jsonDecode(capturedBody!) as Map<String, dynamic>;
+    final sentAddress =
+        body['variables']['where']['creator']['equals'] as String;
+    // Must be checksummed, not lowercase.
+    expect(sentAddress, '0x3074C8732366cE5DB80986aBA8FB69897872DdB9');
   });
 }

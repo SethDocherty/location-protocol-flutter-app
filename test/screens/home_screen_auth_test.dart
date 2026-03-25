@@ -5,6 +5,7 @@ import 'package:location_protocol_flutter_app/screens/home_screen.dart';
 import 'package:location_protocol_flutter_app/services/reown_service.dart';
 import 'package:location_protocol_flutter_app/services/runtime_network_config.dart';
 import 'package:location_protocol_flutter_app/settings/settings_service.dart';
+import 'package:location_protocol_flutter_app/providers/schema_provider.dart';
 import 'package:location_protocol_flutter_app/privy/privy_auth_provider.dart';
 import 'package:privy_flutter/privy_flutter.dart';
 import 'package:provider/provider.dart';
@@ -59,8 +60,11 @@ Future<AppWalletProvider> _buildWalletProvider({
 }
 
 Widget _buildApp(AppWalletProvider walletProvider) {
-  return ChangeNotifierProvider<AppWalletProvider>.value(
-    value: walletProvider,
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider<AppWalletProvider>.value(value: walletProvider),
+      ChangeNotifierProvider<SchemaProvider>(create: (_) => SchemaProvider()),
+    ],
     child: MaterialApp(
       home: const HomeScreen(
         runtimeNetworkConfig: RuntimeNetworkConfig(
@@ -106,7 +110,7 @@ void main() {
     expect(find.text('Connect Wallet'), findsNothing);
     expect(find.text('Sign Offchain Attestation'), findsOneWidget);
     expect(find.text('Attest Onchain'), findsOneWidget);
-    expect(find.text('Register Schema'), findsOneWidget);
+    expect(find.text('Schema Manager'), findsOneWidget);
     expect(find.text('Timestamp Offchain UID'), findsOneWidget);
   });
 
@@ -124,7 +128,7 @@ void main() {
     expect(find.text('Connect Wallet'), findsNothing);
     expect(find.text('Sign Offchain Attestation'), findsOneWidget);
     expect(find.text('Attest Onchain'), findsNothing);
-    expect(find.text('Register Schema'), findsNothing);
+    expect(find.text('Schema Manager'), findsNothing);
     expect(find.text('Timestamp Offchain UID'), findsNothing);
   });
 }
