@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:location_protocol/location_protocol.dart';
 import 'package:location_protocol_flutter_app/providers/app_wallet_provider.dart';
+import 'package:location_protocol_flutter_app/providers/schema_provider.dart';
 import 'package:location_protocol_flutter_app/protocol/attestation_service.dart';
 import 'package:location_protocol_flutter_app/screens/onchain_attest_screen.dart';
 import 'package:location_protocol_flutter_app/settings/settings_service.dart';
@@ -42,10 +43,11 @@ class FakeOnchainAttestationService extends AttestationService {
         );
 
   @override
-  Uint8List buildAttestCallData({
+  Uint8List buildAttestCallDataWithUserData({
+    required SchemaDefinition schema,
     required double lat,
     required double lng,
-    required String memo,
+    required Map<String, dynamic> userData,
     BigInt? eventTimestamp,
   }) {
     return Uint8List.fromList([1, 2, 3]);
@@ -89,14 +91,18 @@ void main() {
     final service = FakeOnchainAttestationService();
 
     await tester.pumpWidget(
-      ChangeNotifierProvider<AppWalletProvider>.value(
-        value: walletProvider,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AppWalletProvider>.value(value: walletProvider),
+          ChangeNotifierProvider<SchemaProvider>(create: (_) => SchemaProvider()),
+        ],
         child: MaterialApp(
           home: OnchainAttestScreen(service: service),
         ),
       ),
     );
 
+    await tester.ensureVisible(find.text('Submit Onchain Attestation'));
     await tester.tap(find.text('Submit Onchain Attestation'));
     await tester.pumpAndSettle();
 

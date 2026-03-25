@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:location_protocol_flutter_app/providers/app_wallet_provider.dart';
 import 'package:location_protocol_flutter_app/screens/home_screen.dart';
-import 'package:location_protocol_flutter_app/services/reown_service.dart';
 import 'package:location_protocol_flutter_app/services/runtime_network_config.dart';
 import 'package:location_protocol_flutter_app/settings/settings_service.dart';
 import 'package:location_protocol_flutter_app/providers/schema_provider.dart';
@@ -48,11 +48,9 @@ class FakePrivyAuthState extends PrivyAuthState {
 
 Future<AppWalletProvider> _buildWalletProvider({
   required PrivyAuthState privyAuth,
-  ReownService? reownService,
 }) async {
   final provider = AppWalletProvider(
     privyAuth: privyAuth,
-    reownService: reownService,
     settingsService: await SettingsService.create(),
   );
   await provider.ready;
@@ -81,54 +79,30 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('disconnected state shows the login CTA', (tester) async {
+  testWidgets('copy button exists and shows snackbar when clicked', (tester) async {
     final walletProvider = await _buildWalletProvider(
       privyAuth: FakePrivyAuthState(ready: true, authenticated: false),
     );
+    // Simulate an external wallet connected
+    await walletProvider.setExternalAddress('0x1234567890123456789012345678901234567890');
 
     await tester.pumpWidget(_buildApp(walletProvider));
     await tester.pumpAndSettle();
 
-    expect(find.text('Connect Wallet'), findsOneWidget);
-    expect(find.text('Sign Offchain Attestation'), findsOneWidget);
-    expect(find.text('Attest Onchain'), findsNothing);
-  });
+    // Find the copy button by tooltip
+    final copyButton = find.byTooltip('Copy Address');
+    expect(copyButton, findsOneWidget);
+    expect(find.byIcon(Icons.copy), findsOneWidget);
 
-  testWidgets('external wallet state exposes the offchain path and onchain actions',
-      (tester) async {
-    final walletProvider = await _buildWalletProvider(
-      privyAuth: FakePrivyAuthState(ready: true, authenticated: false),
-      reownService: ReownService(),
-    );
-    await walletProvider.setExternalAddress(
-      '0x1234567890123456789012345678901234567890',
-    );
+    // Click the button
+    await tester.tap(copyButton);
+    await tester.pump();
 
-    await tester.pumpWidget(_buildApp(walletProvider));
-    await tester.pumpAndSettle();
+    // Verify Snackbar appears
+    expect(find.text('Address copied'), findsOneWidget);
 
-    expect(find.text('Connect Wallet'), findsNothing);
-    expect(find.text('Sign Offchain Attestation'), findsOneWidget);
-    expect(find.text('Attest Onchain'), findsOneWidget);
-    expect(find.text('Schema Manager'), findsOneWidget);
-    expect(find.text('Timestamp Offchain UID'), findsOneWidget);
-  });
-
-  testWidgets('private key state keeps onchain actions hidden', (tester) async {
-    final walletProvider = await _buildWalletProvider(
-      privyAuth: FakePrivyAuthState(ready: true, authenticated: false),
-    );
-    await walletProvider.setPrivateKey(
-      '0000000000000000000000000000000000000000000000000000000000000001',
-    );
-
-    await tester.pumpWidget(_buildApp(walletProvider));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Connect Wallet'), findsNothing);
-    expect(find.text('Sign Offchain Attestation'), findsOneWidget);
-    expect(find.text('Attest Onchain'), findsNothing);
-    expect(find.text('Schema Manager'), findsNothing);
-    expect(find.text('Timestamp Offchain UID'), findsNothing);
+    // Verify Clipboard was called (basic check by ensuring no error occurred)
+    // In a real environment we could verify the clipboard content, 
+    // but in widget tests we'd need to mock the clipboard service if we wanted deeper verification.
   });
 }

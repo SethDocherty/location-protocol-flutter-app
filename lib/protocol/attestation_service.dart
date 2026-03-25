@@ -55,6 +55,22 @@ class AttestationService {
     );
   }
 
+  /// Signs an offchain attestation with an explicit userData map.
+  /// Use this for dynamic schemas where userData is built from user inputs.
+  Future<SignedOffchainAttestation> signOffchainWithData({
+    required SchemaDefinition schema,
+    required double lat,
+    required double lng,
+    required Map<String, dynamic> userData,
+  }) {
+    final lpPayload = AppSchema.buildLPPayload(lat: lat, lng: lng);
+    return _offchainSigner.signOffchainAttestation(
+      schema: schema,
+      lpPayload: lpPayload,
+      userData: userData,
+    );
+  }
+
   /// Verifies an offchain attestation. Returns synchronously.
   VerificationResult verifyOffchain(SignedOffchainAttestation attestation) {
     return _offchainSigner.verifyOffchainAttestation(attestation);
@@ -79,14 +95,29 @@ class AttestationService {
     );
   }
 
+  /// Builds onchain attest calldata with an explicit userData map.
+  /// Use this for dynamic schemas where userData is built from user inputs.
+  Uint8List buildAttestCallDataWithUserData({
+    required SchemaDefinition schema,
+    required double lat,
+    required double lng,
+    required Map<String, dynamic> userData,
+  }) {
+    return EASClient.buildAttestCallData(
+      schema: schema,
+      lpPayload: AppSchema.buildLPPayload(lat: lat, lng: lng),
+      userData: userData,
+    );
+  }
+
   /// Builds calldata for timestamping an offchain UID (wallet path).
   Uint8List buildTimestampCallData(String uid) {
     return EASClient.buildTimestampCallData(uid);
   }
 
   /// Builds calldata for schema registration (wallet path).
-  Uint8List buildRegisterSchemaCallData() {
-    return SchemaRegistryClient.buildRegisterCallData(AppSchema.definition);
+  Uint8List buildRegisterSchemaCallData([SchemaDefinition? schema]) {
+    return SchemaRegistryClient.buildRegisterCallData(schema ?? AppSchema.definition);
   }
 
   /// Wraps calldata into a wallet-friendly tx request map.
@@ -117,26 +148,34 @@ class AttestationService {
   String get schemaRegistryAddress =>
       ChainConfig.forChainId(chainId)!.schemaRegistry;
 
-  /// Checks if the current app schema is registered on-chain.
-  Future<bool> isSchemaRegistered() async {
-    final uid = AppSchema.schemaUID.toLowerCase();
-    final record = await getSchemaRecord(uid);
+  /// Generalized registration check — works for any schema UID.
+  Future<bool> isSchemaUidRegistered(String uid) async {
+    final normalizedUid = uid.toLowerCase().startsWith('0x')
+        ? uid.toLowerCase()
+        : '0x${uid.toLowerCase()}';
+    final record = await getSchemaRecord(normalizedUid);
     if (record == null || record.length < 66) return false;
 
-    // In EAS, getSchema returns a `SchemaRecord` struct. Because this struct contains a dynamic 
+    // In EAS, getSchema returns a `SchemaRecord` struct. Because this struct contains a dynamic
     // string, the entire return value is ABI-encoded as a dynamic type. This means the return data
     // typically starts with a 32-byte offset (0x20) pointing to the actual struct data.
     // The UID is the first 32 bytes of the struct data.
     String returnedUid;
-    if (record.length >= 130 && record.startsWith('0x0000000000000000000000000000000000000000000000000000000000000020')) {
+    if (record.length >= 130 &&
+        record.startsWith(
+            '0x0000000000000000000000000000000000000000000000000000000000000020')) {
       returnedUid = '0x${record.substring(66, 130)}'.toLowerCase();
     } else {
       // Fallback in case the record doesn't start with the expected offset
       returnedUid = record.substring(0, 66).toLowerCase();
     }
-    
-    return returnedUid == uid;
+
+    return returnedUid == normalizedUid;
   }
+
+  /// Checks if the current app schema is registered on-chain.
+  Future<bool> isSchemaRegistered() =>
+      isSchemaUidRegistered(AppSchema.schemaUID);
 
   /// Checks if a UID has already been timestamped onchain.
   Future<bool> isTimestamped(String uid) async {

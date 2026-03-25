@@ -62,6 +62,10 @@ class NetworkLinks {
     return '$domain/schema/view/$uid';
   }
 
+  /// Returns the raw EAS Scan base domain for a chain, or null if unsupported.
+  /// Used to construct GraphQL endpoints: '${getEasScanDomain(chainId)}/graphql'.
+  static String? getEasScanDomain(int chainId) => _easScanDomains[chainId];
+
   /// Returns the Block Explorer URL for a specific transaction hash, or null if unsupported.
   static String? getExplorerTxUrl(int chainId, String txHash) {
     final domain = _explorerDomains[chainId];

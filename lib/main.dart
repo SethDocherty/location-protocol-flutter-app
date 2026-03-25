@@ -8,6 +8,7 @@ import 'services/runtime_network_config.dart';
 import 'services/reown_service.dart';
 import 'settings/settings_service.dart';
 import 'providers/app_wallet_provider.dart';
+import 'providers/schema_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -97,6 +98,10 @@ class _LocationProtocolAppState extends State<LocationProtocolApp> {
           return MultiProvider(
             providers: [
               Provider<ReownService>(create: (_) => ReownService()),
+              ChangeNotifierProvider<SchemaProvider>(
+                create: (_) => SchemaProvider(),
+                lazy: false,
+              ),
               ChangeNotifierProvider<AppWalletProvider>(
                 create: (context) => AppWalletProvider(
                   privyAuth: PrivyAuthProvider.of(context, listen: false),
