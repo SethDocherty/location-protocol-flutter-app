@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../protocol/attestation_service.dart';
 import '../providers/app_wallet_provider.dart';
 import '../providers/schema_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/network_links.dart';
 
 /// Screen for creating an onchain attestation via the Privy wallet.
@@ -106,15 +107,28 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
 
       if (hash != null) {
         if (mounted) setState(() => _txHash = hash);
-
-        // Wait for the UID
-        final uid = await widget.service.waitForAttestationUid(hash);
-        if (mounted) setState(() => _uid = uid);
       }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
+      // Unblock the button as soon as we have a result (hash or error).
       if (mounted) setState(() => _submitting = false);
+    }
+
+    // Poll for the UID independently — the button is already re-enabled.
+    final hash = _txHash;
+    if (hash != null) {
+      _pollForUid(hash);
+    }
+  }
+
+  Future<void> _pollForUid(String hash) async {
+    try {
+      final uid = await widget.service.waitForAttestationUid(hash);
+      if (mounted) setState(() => _uid = uid);
+    } catch (e) {
+      // Silently ignore UID polling failures — the TX hash card is already
+      // visible and the user can manually look up the attestation.
     }
   }
 
@@ -232,9 +246,10 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
                 if (NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!) != null)
                   TextButton.icon(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('View at: ${NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!)}')),
-                      );
+                      final url = NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!);
+                      if (url != null) {
+                        launchUrl(Uri.parse(url));
+                      }
                     },
                     icon: const Icon(Icons.open_in_new),
                     label: const Text('Block Explorer'),
@@ -242,9 +257,10 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
                 if (_uid != null && NetworkLinks.getEasScanAttestationUrl(widget.service.chainId, _uid!) != null)
                   TextButton.icon(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('View at: ${NetworkLinks.getEasScanAttestationUrl(widget.service.chainId, _uid!)}')),
-                      );
+                      final url = NetworkLinks.getEasScanAttestationUrl(widget.service.chainId, _uid!);
+                      if (url != null) {
+                        launchUrl(Uri.parse(url));
+                      }
                     },
                     icon: const Icon(Icons.open_in_new),
                     label: const Text('EAS Scan'),

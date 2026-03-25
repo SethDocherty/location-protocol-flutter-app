@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_wallet_provider.dart';
 
 import '../protocol/attestation_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/network_links.dart';
 
 /// Screen for timestamping an offchain attestation UID onchain.
@@ -154,13 +155,13 @@ class _TimestampScreenState extends State<TimestampScreen> {
                         const SizedBox(height: 8),
                         TextButton.icon(
                           onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'View at: ${NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!)}',
-                                ),
-                              ),
+                            final url = NetworkLinks.getExplorerTxUrl(
+                              widget.service.chainId,
+                              _txHash!,
                             );
+                            if (url != null) {
+                              launchUrl(Uri.parse(url));
+                            }
                           },
                           icon: const Icon(Icons.open_in_new),
                           label: const Text('View on Block Explorer'),
