@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:location_protocol/location_protocol.dart';
 
 import '../privy/privy_module.dart';
@@ -299,6 +300,16 @@ class _WalletCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.copy, size: 16),
+              tooltip: 'Copy Address',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: address));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Address copied')),
+                );
+              },
             ),
           ],
         ),
