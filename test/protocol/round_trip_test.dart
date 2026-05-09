@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:location_protocol/location_protocol.dart';
 import 'package:location_protocol_flutter_app/protocol/attestation_service.dart';
 import 'package:location_protocol_flutter_app/protocol/schema_config.dart';
+import 'package:location_protocol_flutter_app/utils/attestation_json.dart';
 
 const _testPrivateKey =
     '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -46,15 +47,42 @@ void main() {
       expect(a.uid, isNot(b.uid));
     });
 
-    test('attestation uses version 2 with salt', () async {
+    test('attestation exports canonical version 2 envelope', () async {
       final signed = await service.signOffchain(
         lat: 0,
         lng: 0,
         memo: 'version test',
       );
 
-      expect(signed.version, 2);
-      expect(signed.salt, isNotEmpty);
+      expect(signed.offchainVersion, 2);
+      expect(signed.saltHex, isNotNull);
+
+      final json = signedOffchainAttestationToJsonMap(signed);
+      final sig = json['sig'] as Map<String, dynamic>;
+      final types = sig['types'] as Map<String, dynamic>;
+      final message = sig['message'] as Map<String, dynamic>;
+      final signature = sig['signature'] as Map<String, dynamic>;
+
+      expect(json, containsPair('signer', signed.signer));
+      expect(json.keys, unorderedEquals(const ['signer', 'sig']));
+      expect(sig.keys, unorderedEquals(const [
+        'domain',
+        'primaryType',
+        'types',
+        'message',
+        'signature',
+        'uid',
+      ]));
+      expect(sig['uid'], signed.uid);
+      expect(sig['primaryType'], 'Attest');
+      expect(types.keys, unorderedEquals(const ['EIP712Domain', 'Attest']));
+      expect(message['version'], 2);
+      expect(message['salt'], signed.saltHex);
+      expect(signature, equals({
+        'v': signed.signature.v,
+        'r': signed.signature.r,
+        's': signed.signature.s,
+      }));
     });
 
     test('attestation uses app schema UID', () async {
