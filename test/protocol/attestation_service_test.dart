@@ -8,6 +8,7 @@ import 'package:location_protocol/location_protocol.dart';
 import 'package:location_protocol_flutter_app/protocol/attestation_service.dart';
 import 'package:location_protocol_flutter_app/protocol/privy_signer.dart';
 import 'package:location_protocol_flutter_app/protocol/schema_config.dart';
+import 'package:location_protocol_flutter_app/utils/attestation_json.dart';
 
 const _testPrivateKey =
     '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -160,6 +161,65 @@ void main() {
       );
 
       final verification = service.verifyOffchain(signed);
+
+      expect(verification.isValid, isTrue);
+      expect(
+        verification.recoveredAddress.toLowerCase(),
+        signed.signer.toLowerCase(),
+      );
+    });
+
+    test('canonical exported JSON verifies after decode', () async {
+      final signed = await service.signOffchain(
+        lat: 51.5074,
+        lng: -0.1278,
+        memo: 'canonical export verify',
+      );
+
+      final encoded = encodeSignedOffchainAttestationJson(signed);
+      final parsed = jsonDecode(encoded) as Map<String, dynamic>;
+      final sig = parsed['sig'] as Map<String, dynamic>;
+      final types = sig['types'] as Map<String, dynamic>;
+      final message = sig['message'] as Map<String, dynamic>;
+      final signature = sig['signature'] as Map<String, dynamic>;
+
+      expect(parsed.keys, unorderedEquals(const ['signer', 'sig']));
+      expect(parsed['signer'], signed.signer);
+
+      expect(sig.keys, unorderedEquals(const [
+        'domain',
+        'primaryType',
+        'types',
+        'message',
+        'signature',
+        'uid',
+      ]));
+      expect(sig['primaryType'], 'Attest');
+      expect(sig['uid'], signed.uid);
+      expect(types.keys, unorderedEquals(const ['EIP712Domain', 'Attest']));
+      expect(message.keys, unorderedEquals(const [
+        'version',
+        'schema',
+        'recipient',
+        'time',
+        'expirationTime',
+        'revocable',
+        'refUID',
+        'data',
+        'salt',
+      ]));
+      expect(message['schema'], signed.schemaUID);
+      expect(message['time'], isA<int>());
+      expect(message['expirationTime'], isA<int>());
+      expect(message['version'], isA<int>());
+      expect(signature, equals({
+        'v': signed.signature.v,
+        'r': signed.signature.r,
+        's': signed.signature.s,
+      }));
+
+      final restored = decodeSignedOffchainAttestationJson(encoded);
+      final verification = service.verifyOffchain(restored);
 
       expect(verification.isValid, isTrue);
       expect(
