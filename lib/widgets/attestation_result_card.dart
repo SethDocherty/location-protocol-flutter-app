@@ -1,8 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:location_protocol/location_protocol.dart';
+
+import '../utils/attestation_json.dart';
 
 /// Displays the result of a signed offchain attestation.
 class AttestationResultCard extends StatelessWidget {
@@ -79,31 +80,7 @@ class AttestationResultCard extends StatelessWidget {
   }
 
   void _copyToClipboard(BuildContext context) {
-    // Generate hex representation of Uint8List data
-    final dataHex = '0x${attestation.data.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
-
-    // Build the map matching what VerifyScreen._parseAttestation expects
-    final map = {
-      'uid': attestation.uid,
-      'schemaUID': attestation.schemaUID,
-      'recipient': attestation.recipient,
-      'time': attestation.time.toInt(),
-      'expirationTime': attestation.expirationTime.toInt(),
-      'revocable': attestation.revocable,
-      'refUID': attestation.refUID,
-      'data': dataHex,
-      'salt': attestation.salt,
-      'version': attestation.version,
-      'signature': {
-        'v': attestation.signature.v,
-        'r': attestation.signature.r,
-        's': attestation.signature.s,
-      },
-      'signer': attestation.signer,
-    };
-
-    // Format as pretty-printed JSON
-    final text = const JsonEncoder.withIndent('  ').convert(map);
+    final text = encodeSignedOffchainAttestationJson(attestation);
 
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -111,4 +88,3 @@ class AttestationResultCard extends StatelessWidget {
     );
   }
 }
-

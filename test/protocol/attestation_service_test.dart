@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -11,6 +12,33 @@ import 'package:location_protocol_flutter_app/protocol/schema_config.dart';
 const _testPrivateKey =
     '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const _testAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
+
+String _encodeAbiSchemaRecord({
+  required String uid,
+  required String schema,
+  String resolver = EASConstants.zeroAddress,
+  bool revocable = true,
+}) {
+  final schemaHex = utf8.encode(schema).map(
+    (byte) => byte.toRadixString(16).padLeft(2, '0'),
+  ).join();
+  final paddedSchemaHex = schemaHex.padRight(
+    ((schemaHex.length + 63) ~/ 64) * 64,
+    '0',
+  );
+  final schemaLengthWord = schema.length.toRadixString(16).padLeft(64, '0');
+  final resolverWord = resolver.replaceFirst('0x', '').padLeft(64, '0');
+  final revocableWord = revocable ? '1'.padLeft(64, '0') : ''.padLeft(64, '0');
+
+  return '0x'
+      '${'20'.padLeft(64, '0')}'
+      '${uid.replaceFirst('0x', '')}'
+      '$resolverWord'
+      '$revocableWord'
+      '${'80'.padLeft(64, '0')}'
+      '$schemaLengthWord'
+      '$paddedSchemaHex';
+}
 
 void main() {
   late AttestationService service;
@@ -299,7 +327,39 @@ void main() {
         expect(capturedRequests.single['body'], contains('"method":"eth_call"'));
       });
 
-      test('getTransactionReceipt uses the configured RPC URL', () async {
+      test('isTimestamped returns false for the zero timestamp word', () async {
+        privySigner = buildFailingSigner();
+        rpcService = AttestationService(
+          signer: privySigner,
+          chainId: 1,
+          rpcUrl: configuredRpcUrl,
+          httpClient: buildClient(
+            '{"jsonrpc":"2.0","id":1,"result":"${EASConstants.zeroBytes32}"}',
+          ),
+        );
+
+        final result = await rpcService.isTimestamped('0x${'ab' * 32}');
+
+        expect(result, isFalse);
+      });
+
+      test('isTimestamped returns true for a non-zero timestamp word', () async {
+        privySigner = buildFailingSigner();
+        rpcService = AttestationService(
+          signer: privySigner,
+          chainId: 1,
+          rpcUrl: configuredRpcUrl,
+          httpClient: buildClient(
+            '{"jsonrpc":"2.0","id":1,"result":"0x${'00' * 31}01"}',
+          ),
+        );
+
+        final result = await rpcService.isTimestamped('0x${'ab' * 32}');
+
+        expect(result, isTrue);
+      });
+
+      test('getTransactionReceipt returns a typed TransactionReceipt', () async {
         privySigner = buildFailingSigner();
         rpcService = AttestationService(
           signer: privySigner,
@@ -312,8 +372,9 @@ void main() {
 
         final receipt = await rpcService.getTransactionReceipt('0x123');
 
-        expect(receipt, isA<Map<String, dynamic>>());
-        expect(receipt!['blockNumber'], '0x1');
+        expect(receipt, isA<TransactionReceipt>());
+        expect(receipt!.blockNumber, 1);
+        expect(receipt.status, isTrue);
         expect(signerRpcCalls, 0);
         expect(capturedRequests.single['url'], configuredRpcUrl);
         expect(capturedRequests.single['body'], contains('"method":"eth_getTransactionReceipt"'));
@@ -336,7 +397,7 @@ void main() {
               return http.Response('{"jsonrpc":"2.0","id":1,"result":null}', 200);
             }
             return http.Response(
-              '{"jsonrpc":"2.0","id":1,"result":{"logs":[{"address":"${rpcService.easAddress}","data":"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"}]}}',
+              '{"jsonrpc":"2.0","id":1,"result":{"logs":[{"address":"${rpcService.easAddress}","topics":["${EASConstants.attestedEventTopic}"],"data":"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"}]}}',
               200,
             );
           }),
@@ -353,9 +414,63 @@ void main() {
         expect(capturedRequests, hasLength(2));
         expect(capturedRequests.every((request) => request['url'] == configuredRpcUrl), isTrue);
       });
+
+      test('waitForAttestationUid ignores non-Attested logs from the EAS contract', () async {
+        privySigner = buildFailingSigner();
+        rpcService = AttestationService(
+          signer: privySigner,
+          chainId: 11155111,
+          rpcUrl: configuredRpcUrl,
+          httpClient: buildClient(
+            '{"jsonrpc":"2.0","id":1,"result":{"blockNumber":"0x1","status":"0x1","logs":[{"address":"${ChainConfig.forChainId(11155111)!.eas}","topics":["0xdeadbeef"],"data":"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"}]}}',
+          ),
+        );
+
+        await expectLater(
+          rpcService.waitForAttestationUid('0xtx'),
+          throwsStateError,
+        );
+      });
+
+      test('waitForAttestationUid throws StateError when the receipt is reverted', () async {
+        privySigner = buildFailingSigner();
+        rpcService = AttestationService(
+          signer: privySigner,
+          chainId: 11155111,
+          rpcUrl: configuredRpcUrl,
+          httpClient: buildClient(
+            '{"jsonrpc":"2.0","id":1,"result":{"blockNumber":"0x2","status":"0x0","logs":[]}}',
+          ),
+        );
+
+        await expectLater(
+          rpcService.waitForAttestationUid('0xreverted'),
+          throwsStateError,
+        );
+      });
   });
 
   group('AttestationService — new dynamic methods', () {
+    test('isSchemaUidRegistered returns true for a matching ABI-encoded schema record', () async {
+      final schemaRecord = _encodeAbiSchemaRecord(
+        uid: AppSchema.schemaUID,
+        schema: AppSchema.definition.toEASSchemaString(),
+      );
+      final customService = AttestationService(
+        signer: LocalKeySigner(privateKeyHex: _testPrivateKey),
+        chainId: 11155111,
+        rpcUrl: 'https://unused.rpc',
+        httpClient: FakeClient((_) async => http.Response(
+          '{"jsonrpc":"2.0","id":1,"result":"$schemaRecord"}',
+          200,
+        )),
+      );
+
+      final result = await customService.isSchemaUidRegistered(AppSchema.schemaUID);
+
+      expect(result, isTrue);
+    });
+
     test('isSchemaUidRegistered accepts any UID (returns false for test RPC)', () async {
       // Enough to test the method exists and doesn't throw with a fake RPC response
       final customService = AttestationService(

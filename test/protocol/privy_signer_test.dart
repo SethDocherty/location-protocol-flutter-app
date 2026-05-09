@@ -91,7 +91,7 @@ void main() {
       expect(decoded['domain']['name'], 'EAS');
     });
 
-    test('remaps primaryType to primary_type for Privy Android SDK', () async {
+    test('remaps primaryType to primary_type for Privy embedded wallet', () async {
       String? capturedJson;
 
       final signer = PrivySigner(
@@ -110,12 +110,11 @@ void main() {
       });
 
       final decoded = jsonDecode(capturedJson!) as Map<String, dynamic>;
-      // Privy Android SDK requires snake_case 'primary_type', not camelCase.
-      expect(decoded.containsKey('primary_type'), isTrue,
-          reason: 'Privy Android SDK requires primary_type (snake_case)');
-      expect(decoded.containsKey('primaryType'), isFalse,
-          reason: 'primaryType (camelCase) must be removed');
-      expect(decoded['primary_type'], 'Attest');
+        expect(decoded.containsKey('primary_type'), isTrue,
+          reason: 'Embedded Privy wallets parse primary_type on the native side');
+        expect(decoded.containsKey('primaryType'), isFalse,
+          reason: 'App transport must remove camelCase primaryType before RPC');
+        expect(decoded['primary_type'], 'Attest');
     });
 
     test('returns EIP712Signature parsed from hex response', () async {
@@ -241,9 +240,8 @@ void main() {
         walletAddress: _testAddress,
         rpcCaller: (method, params) async {
           // Parse the typed data JSON that PrivySigner sends to Privy.
-          // PrivySigner remaps primaryType → primary_type for the Privy SDK.
-          // LocalKeySigner uses on_chain which expects the EIP-712 camelCase key,
-          // so we remap it back here (as the real Privy SDK would handle it natively).
+          // PrivySigner remaps primaryType -> primary_type for the embedded
+          // wallet bridge, but LocalKeySigner expects the standard EIP-712 key.
           final typedData = jsonDecode(params[1] as String) as Map<String, dynamic>;
           if (typedData.containsKey('primary_type')) {
             typedData['primaryType'] = typedData.remove('primary_type');

@@ -176,6 +176,7 @@ void main() {
       () => reownService.sendTransaction(
         any(),
         any(),
+        targetChainId: any(named: 'targetChainId'),
       ),
     ).thenAnswer((_) async => '0xexternal-hash');
 
@@ -189,12 +190,26 @@ void main() {
     await provider.setExternalAddress('0x1234567890123456789012345678901234567890');
 
     final hash = await provider.sendTransaction(
-      const {'to': '0xabc'},
+      const {
+        'to': '0xabc',
+        'chainId': '0xaa36a7',
+        'sponsor': true,
+      },
       context: context,
     );
 
     expect(hash, '0xexternal-hash');
-    verify(() => reownService.sendTransaction(any(), any())).called(1);
+    verify(
+      () => reownService.sendTransaction(
+        any(),
+        {
+          'to': '0xabc',
+          'chainId': '0xaa36a7',
+          'sponsor': true,
+        },
+        targetChainId: 'eip155:11155111',
+      ),
+    ).called(1);
   });
 
   test('sendTransaction returns a hash for privy wallets', () async {

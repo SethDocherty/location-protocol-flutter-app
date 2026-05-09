@@ -83,12 +83,11 @@ class PrivySigner extends Signer {
   /// The [typedData] map is the complete EIP-712 typed data structure
   /// as produced by the library's `OffchainSigner.buildOffchainTypedDataJson()`.
   ///
-  /// **Key remapping:** The EIP-712 spec uses `primaryType` (camelCase), but
-  /// Privy's Android SDK (kotlinx.serialization) requires `primary_type`
-  /// (snake_case). This method remaps the key before encoding to JSON.
+  /// Privy embedded wallets currently parse `primary_type` on the native side,
+  /// so the app must rewrite the standard EIP-712 `primaryType` key before the
+  /// JSON-string transport used by the Flutter RPC bridge.
   @override
   Future<EIP712Signature> signTypedData(Map<String, dynamic> typedData) async {
-    // Remap `primaryType` → `primary_type` for Privy Android SDK compatibility.
     final remapped = Map<String, dynamic>.of(typedData);
     if (remapped.containsKey('primaryType')) {
       remapped['primary_type'] = remapped.remove('primaryType');

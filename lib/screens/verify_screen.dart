@@ -1,10 +1,8 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:location_protocol/location_protocol.dart';
 
 import '../protocol/attestation_service.dart';
+import '../utils/attestation_json.dart';
 
 /// Screen for verifying an offchain attestation from pasted JSON.
 class VerifyScreen extends StatefulWidget {
@@ -39,7 +37,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
 
     try {
       final jsonText = _jsonController.text.trim();
-      final attestation = _parseAttestation(jsonText);
+      final attestation = decodeSignedOffchainAttestationJson(jsonText);
       _claimedSigner = attestation.signer;
 
       final result = widget.service.verifyOffchain(attestation);
@@ -50,44 +48,6 @@ class _VerifyScreenState extends State<VerifyScreen> {
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
-  }
-
-  /// Parses JSON into a [SignedOffchainAttestation].
-  ///
-  /// Supports the library's model format with fields:
-  /// uid, schemaUID, recipient, time, expirationTime, revocable,
-  /// refUID, data (hex), salt (hex), version, signature {v, r, s}, signer.
-  SignedOffchainAttestation _parseAttestation(String jsonText) {
-    final map = jsonDecode(jsonText) as Map<String, dynamic>;
-
-    // Parse hex data field to Uint8List
-    final dataHex = map['data'] as String;
-    final dataClean = dataHex.startsWith('0x') ? dataHex.substring(2) : dataHex;
-    final data = Uint8List.fromList([
-      for (var i = 0; i < dataClean.length; i += 2)
-        int.parse(dataClean.substring(i, i + 2), radix: 16),
-    ]);
-
-    final sigMap = map['signature'] as Map<String, dynamic>;
-
-    return SignedOffchainAttestation(
-      uid: map['uid'] as String,
-      schemaUID: map['schemaUID'] as String,
-      recipient: map['recipient'] as String,
-      time: BigInt.from(map['time'] as int),
-      expirationTime: BigInt.from(map['expirationTime'] as int),
-      revocable: map['revocable'] as bool,
-      refUID: map['refUID'] as String,
-      data: data,
-      salt: map['salt'] as String,
-      version: map['version'] as int,
-      signature: EIP712Signature(
-        v: sigMap['v'] as int,
-        r: sigMap['r'] as String,
-        s: sigMap['s'] as String,
-      ),
-      signer: map['signer'] as String,
-    );
   }
 
   @override
