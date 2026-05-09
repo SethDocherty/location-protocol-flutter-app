@@ -333,7 +333,7 @@ class _SchemaManagerScreenState extends State<SchemaManagerScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<String>(
-                    value: type,
+                    initialValue: type,
                     items: const [
                       'string', 'uint256', 'address', 'bool', 'bytes', 'bytes32', 'string[]', 'bytes[]'
                     ].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
