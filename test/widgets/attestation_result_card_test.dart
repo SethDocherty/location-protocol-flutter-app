@@ -1,9 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:location_protocol/location_protocol.dart';
 import 'package:location_protocol_flutter_app/protocol/attestation_service.dart';
-import 'package:location_protocol_flutter_app/utils/attestation_json.dart';
 import 'package:location_protocol_flutter_app/widgets/attestation_result_card.dart';
 
 const _testPrivateKey =
@@ -12,11 +13,12 @@ const _testPrivateKey =
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('copy full result exports app JSON that can be decoded', (
+  testWidgets('copy EAS JSON exports the canonical EAS attestation envelope', (
     tester,
   ) async {
     String? clipboardText;
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
       SystemChannels.platform,
       (call) async {
         if (call.method == 'Clipboard.setData') {
@@ -30,6 +32,9 @@ void main() {
         return null;
       },
     );
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+    });
 
     final service = AttestationService(
       signer: LocalKeySigner(privateKeyHex: _testPrivateKey),
@@ -49,22 +54,51 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Copy Full Result'));
+    expect(find.text('Schema UID'), findsOneWidget);
+    expect(find.text('Offchain Version'), findsOneWidget);
+    expect(find.text('Copy EAS JSON'), findsOneWidget);
+
+    await tester.tap(find.text('Copy EAS JSON'));
     await tester.pump();
 
-    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-    final restored = decodeSignedOffchainAttestationJson(clipboardData!.text!);
+    expect(clipboardText, isNotNull);
 
-    expect(restored.uid, attestation.uid);
-    expect(restored.signer, attestation.signer);
+    final parsed = jsonDecode(clipboardText!) as Map<String, dynamic>;
+    final sig = parsed['sig'] as Map<String, dynamic>;
+    final message = sig['message'] as Map<String, dynamic>;
+    final signature = sig['signature'] as Map<String, dynamic>;
+
+    expect(parsed.keys.toSet(), equals({'signer', 'sig'}));
+    expect(parsed['signer'], attestation.signer);
     expect(
-      find.text('Attestation copied to clipboard as JSON'),
-      findsOneWidget,
+      sig.keys.toSet(),
+      equals({
+        'domain',
+        'primaryType',
+        'types',
+        'message',
+        'signature',
+        'uid',
+      }),
     );
-
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      SystemChannels.platform,
-      null,
+    expect(sig['domain'], isA<Map<String, dynamic>>());
+    expect(sig['primaryType'], 'Attest');
+    expect(sig['types'], isA<Map<String, dynamic>>());
+    expect(sig['message'], isA<Map<String, dynamic>>());
+    expect(sig['signature'], isA<Map<String, dynamic>>());
+    expect(sig['uid'], attestation.uid);
+    expect(message['schema'], attestation.schemaUID);
+    expect(
+      signature,
+      equals({
+        'v': attestation.signature.v,
+        'r': attestation.signature.r,
+        's': attestation.signature.s,
+      }),
+    );
+    expect(
+      find.text('Attestation copied to clipboard as EAS JSON'),
+      findsOneWidget,
     );
   });
 }

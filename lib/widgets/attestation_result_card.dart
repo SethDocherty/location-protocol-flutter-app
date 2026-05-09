@@ -33,8 +33,8 @@ class AttestationResultCard extends StatelessWidget {
                 attestation.time.toInt() * 1000,
               ).toIso8601String(),
             ),
-            _row('Version', attestation.version.toString()),
-            _row('Salt', attestation.salt),
+            _row('Offchain Version', attestation.offchainVersion.toString()),
+            _row('Salt', attestation.saltHex ?? '—'),
             const Divider(),
             Text('Signature', style: theme.textTheme.titleSmall),
             _row('v', attestation.signature.v.toString()),
@@ -46,7 +46,7 @@ class AttestationResultCard extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: () => _copyToClipboard(context),
                 icon: const Icon(Icons.copy),
-                label: const Text('Copy Full Result'),
+                label: const Text('Copy EAS JSON'),
               ),
             ),
           ],
@@ -62,7 +62,7 @@ class AttestationResultCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 120,
             child: Text(
               label,
               style: const TextStyle(fontWeight: FontWeight.bold),
@@ -84,7 +84,9 @@ class AttestationResultCard extends StatelessWidget {
 
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Attestation copied to clipboard as JSON')),
+      const SnackBar(
+        content: Text('Attestation copied to clipboard as EAS JSON'),
+      ),
     );
   }
 }
