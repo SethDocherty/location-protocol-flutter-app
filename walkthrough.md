@@ -90,10 +90,10 @@ HomeScreen
 ```
 HomeScreen
   → VerifyScreen
-  → User pastes JSON
-  → Manual JSON parsing → SignedOffchainAttestation
+  → User pastes canonical EAS JSON
+  → Package-backed JSON parsing → SignedOffchainAttestation
   → AttestationService.verifyOffchain()
-      → OffchainSigner.verifyOffchainAttestation()  # library recovers signer
+      → OffchainSigner.verifyOffchainAttestation()  # library verifies preserved payload
   → Display VerificationResult (isValid, recoveredAddress)
 ```
 

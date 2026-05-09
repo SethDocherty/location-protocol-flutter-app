@@ -59,14 +59,17 @@ class _VerifyScreenState extends State<VerifyScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Paste a signed attestation JSON to verify it.'),
+            const Text(
+              'Paste canonical EAS offchain attestation JSON to verify it.',
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _jsonController,
               decoration: const InputDecoration(
                 labelText: 'Attestation JSON',
                 border: OutlineInputBorder(),
-                hintText: '{"uid":"0x...","schemaUID":"0x...",...}',
+                hintText:
+                    '{"signer":"0x...","sig":{"domain":{...},"primaryType":"Attest",...}}',
               ),
               maxLines: 10,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
