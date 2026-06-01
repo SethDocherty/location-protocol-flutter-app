@@ -1,69 +1,134 @@
 # Location Protocol Architecture & Implementation
 
-This document provides a conceptual overview of the Location Protocol and details the specific assumptions and implementation details within this Flutter Signature Service application.
+This document provides a conceptual overview of the Location Protocol and details the architecture and implementation of this Flutter application.
 
 ## Overview
 
 At its core, the [Location Protocol](https://spec.decentralizedgeo.org/introduction/overview/) is a signature service designed to guarantee the integrity and authorship of location records.
 
-The primary goal of this application is to implement the capabilities of creating location attestations as defined by the [Astral SDK](https://github.com/DecentralizedGeo/astral-sdk). It achieves this by using the [Ethereum Attestation Service (EAS)](https://docs.attest.org/docs/purpose/attestation-ecosystem) and its [EAS SDK TypeScript Library](https://github.com/ethereum-attestation-service/eas-sdk) as the reference implementation.
+The primary goal of this application is to implement the capabilities of creating location attestations as defined by the [Astral SDK](https://github.com/DecentralizedGeo/astral-sdk). It achieves this by using the [Ethereum Attestation Service (EAS)](https://docs.attest.org/docs/purpose/attestation-ecosystem) as the underlying attestation infrastructure and supports both onchain and offchain EAS-compatible attestations across a wide range of EVM networks.
 
-## Architecture and Signing Process
+## Supported Capabilities
 
-The following sequence diagram illustrates the flow of submitting the LP Payload and creating an offchain location attestation within this application:
+| Capability | Description |
+|---|---|
+| **Offchain Attestation** | Sign EIP-712 typed data attestations without any on-chain transaction |
+| **Onchain Attestation** | Submit attestations directly to the EAS contract on any supported chain |
+| **Offchain UID Timestamping** | Anchor an offchain attestation UID on-chain for proof of existence |
+| **Offchain Verification** | Verify an EAS canonical JSON attestation and recover the signer address |
+| **Schema Management** | Define custom schema fields, compute deterministic UIDs, and register schemas on-chain |
+
+## Signing Methods
+
+The app supports three distinct wallet/signing integrations, managed through a unified `AppWalletProvider` abstraction:
+
+### 1. Privy Embedded Wallet
+Users authenticate via email, SMS, Google, Twitter, or Discord. Privy automatically provisions an embedded Ethereum wallet. All signing is routed through `eth_signTypedData_v4` and `eth_sendTransaction` via the embedded wallet provider. The `PrivySigner` adapter bridges Privy's RPC interface to the protocol's `Signer` contract.
+
+### 2. External Wallet via Reown (WalletConnect / MetaMask)
+The `ReownService` integrates [Reown AppKit](https://docs.reown.com/appkit/overview) (formerly WalletConnect AppKit) to connect custodial wallets like MetaMask. EIP-712 typed data is presented through the Reown modal, and the resulting signature is captured by `ExternalWalletSigner`. Onchain transactions are dispatched via `ReownService.sendTransaction()`.
+
+### 3. Imported Private Key
+For development and testing, users may import a raw hex private key. The `AppWalletProvider` initializes a `LocalKeySigner` that performs all signing in-process. This path does not support sending transactions.
+
+### Wallet Priority
+
+When multiple wallet types are active, the following priority order applies:
+
+```
+Imported Private Key  >  External Wallet (Reown)  >  Privy Embedded Wallet
+```
+
+## Architecture and Signing Flows
+
+### Offchain Attestation Flow
 
 ```mermaid
 sequenceDiagram
     participant User
     participant App as Flutter App
-    participant Builder as AttestationBuilder
-    participant Encoder as AbiEncoder
-    participant Signer as EIP712Signer
-    participant EAS as EAS Format (Offchain)
+    participant AttestationService
+    participant Signer as Signer (Privy / External / PrivKey)
+    participant Library as location-protocol-dart
 
-    User->>App: Submits the LP Payload
-    App->>Builder: Create UnsignedLocationAttestation
-    Builder-->>App: Returns Unsigned Attestation Object
+    User->>App: Submits LP Payload (lat, lng, fields)
+    App->>AttestationService: signOffchainWithData(schema, lat, lng, userData)
+    AttestationService->>Library: Build UnsignedLocationAttestation
+    Library-->>AttestationService: Unsigned attestation object
 
-    App->>Signer: signLocationAttestation(Unsigned, PrivateKey)
-    
-    Signer->>Encoder: Encode data parameters
-    Note right of Encoder: Encodes (srs, locationType, location, etc.) into ABI bytes
-    Encoder-->>Signer: Returns encoded data hex
+    AttestationService->>Library: signOffchain(attestation, signer)
+    Library->>Signer: eth_signTypedData_v4(EIP-712 domain + message)
+    Signer-->>Library: Signature (v, r, s)
+    Library-->>AttestationService: SignedOffchainAttestation
 
-    Signer->>Signer: Construct EIP-712 Domain Separator & Types
-    Signer->>Signer: Hash message & sign with PrivateKey
-    Note over User: Private Key is loaded from secure local storage
-
-    Signer-->>App: Returns OffchainLocationAttestation (v,r,s signatures)
-
-    App->>EAS: Format to EasOffchainJson
-    EAS-->>App: JSON String ready for verification or sharing
-    App-->>User: Displays Signed Attestation result
+    AttestationService-->>App: EAS canonical JSON
+    App-->>User: Displays signed attestation result
 ```
 
-> [!NOTE]
-> The Location Protocol (LP) Payload is the core data structure containing the location information and essential metadata. It is the input to the signing process and is used to generate the signed attestation.
+### Onchain Attestation Flow
 
-## Implementation Assumptions
+```mermaid
+sequenceDiagram
+    participant User
+    participant App as Flutter App
+    participant AttestationService
+    participant Wallet as Wallet (Privy / Reown)
+    participant EAS as EAS Contract (on-chain)
 
-During the development of this signature service, several specific technical assumptions were made to streamline the signing functionality:
+    User->>App: Submits LP Payload + target chain
+    App->>AttestationService: buildAttestCallDataWithUserData(schema, lat, lng, userData)
+    AttestationService-->>App: Encoded calldata (Uint8List)
 
-### 1. Offchain Focus
-The application is entirely focused on generating **Offchain Attestations** using EIP-712 typed data signing. It omits the complexities of on-chain transactions, gas management, or broadcasting smart contract calls, keeping the scope strictly to data integrity through cryptographic signatures.
+    App->>AttestationService: buildTxRequest(callData, easContractAddress)
+    AttestationService-->>App: EIP-1559 tx request map
 
-### 2. Hardcoded EAS Environment (Sepolia)
-For the purpose of this implementation, the target environment is hardcoded to the **Sepolia Testnet**.
-- **EAS Verifying Contract:** `0xC2679bEA14028036CB4122E1A16c96bA6dC79E89`
-- **Chain ID:** `11155111`
-- **Schema UID:** `0x19943bf08b1a8f6d6edadd49ad91fdcd9720dcbee628cfd600115e5c7096d24a` (This specific schema defines the structure for the Location Protocol fields).
+    App->>Wallet: sendTransaction(txRequest)
+    Wallet->>EAS: eth_sendTransaction
+    EAS-->>Wallet: Transaction hash
 
-### 3. Default Attestation Fields
-When constructing the attestation payload, default values are applied where specific overrides are not provided by the user interface:
-- **`revocable`**: Set to `true` by default.
-- **`expirationTime`**: Set to `0` (indicating no expiration).
-- **`refUID`**: Hardcoded to `0x0000000000000000000000000000000000000000000000000000000000000000` (zero bytes), since these attestations currently stand alone and do not reference previous records.
-- **`recipient`**: Hardcoded to the zero address (`0x0000...`) if none is provided.
+    App->>AttestationService: waitForAttestationUid(txHash)
+    AttestationService->>EAS: Poll for receipt (eth_getTransactionReceipt)
+    EAS-->>AttestationService: Receipt with Attested event log
+    AttestationService-->>App: Attestation UID (decoded from event)
+    App-->>User: Displays UID + block explorer link
+```
 
-### 4. Key Management & Signer Role
-The application assumes that the user will generate or import a raw Ethereum private key into the local secure storage. This key acts as the designated signer for all location attestations created within the app. No external wallet connections (like WalletConnect or MetaMask) are currently integrated; signing is performed entirely in memory using the Dart `web3dart` package.
+## Provider & Service Layer
+
+The app uses Flutter's `Provider` package for dependency injection. Key providers initialized at startup:
+
+| Provider | Role |
+|---|---|
+| `PrivyAuthProvider` | Manages Privy authentication state and embedded wallet lifecycle |
+| `ReownService` | Manages WalletConnect session and external wallet interactions |
+| `AppWalletProvider` | Unified wallet abstraction — exposes `isConnected`, `canSendTransactions`, `getSigner()`, `sendTransaction()` |
+| `SchemaProvider` | Manages the active schema definition, persists user customizations, computes schema UIDs |
+| `AttestationServiceProvider` | Wraps `AttestationService` with the current network config and schema |
+
+## Schema Management
+
+Schemas follow a two-layer structure:
+
+- **LP Base Fields** (automatically prepended by the library): `lp_version`, `srs`, `location_type`, `location`
+- **App-Level Fields** (user-configurable): `uint256 eventTimestamp`, `string[] recipeType`, `bytes[] recipePayload`, `string[] mediaType`, `bytes[] mediaData`, `string memo`
+
+Schema UIDs are computed deterministically from the schema string, resolver address, and revocability flag via `SchemaUID.compute()`. Users can add or remove app-level fields at runtime; changes are persisted to SharedPreferences.
+
+Registered schemas can be queried via the EAS Scan GraphQL API (`EasScanService.queryUserSchemas()`), and registration status can be checked on-chain via `AttestationService.isSchemaUidRegistered()`.
+
+## Multi-Chain Support
+
+The target chain is selected in Settings. All supported chains are defined in `ChainConfig` from the `location-protocol-dart` library. The `RuntimeNetworkConfig` resolves the active chain's EAS contract address, Schema Registry address, and EAS version string at runtime. RPC connectivity is provided either by a manually entered URL or auto-generated via an Infura API key.
+
+Supported networks span both mainnets and testnets including Ethereum, Optimism, Base, Arbitrum One, Arbitrum Nova, Polygon, Celo, Linea, Blast, Scroll, Unichain, Soneium, Ink, and their respective testnets (Sepolia, Optimism Sepolia, Base Sepolia, Arbitrum Sepolia, Polygon Amoy, Scroll Sepolia, Ink Sepolia).
+
+## Default Attestation Field Values
+
+When constructing attestation payloads, the following defaults are applied unless overridden:
+
+| Field | Default Value |
+|---|---|
+| `revocable` | `true` |
+| `expirationTime` | `0` (no expiration) |
+| `refUID` | Zero bytes (`0x000...000`) |
+| `recipient` | Zero address (`0x000...000`) |
