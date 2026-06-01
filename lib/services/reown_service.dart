@@ -3,8 +3,83 @@ import 'package:reown_appkit/reown_appkit.dart';
 import 'package:location_protocol/location_protocol.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+abstract class ReownModalAdapter {
+  bool get isConnected;
+  String? get sessionChainId;
+  String? get selectedChainId;
+  String get sessionTopic;
+  String get address;
+
+  Future<void> openModalView();
+  Future<void> selectChain(String chainId);
+  Future<Object?> request({
+    required String topic,
+    required String chainId,
+    required String method,
+    required List<dynamic> params,
+  });
+}
+
+class ReownAppKitModalAdapter implements ReownModalAdapter {
+  final ReownAppKitModal modal;
+
+  ReownAppKitModalAdapter(this.modal);
+
+  @override
+  bool get isConnected => modal.isConnected;
+
+  @override
+  String get address => modal.session?.getAddress('eip155') ?? '';
+
+  @override
+  String? get selectedChainId => modal.selectedChain?.chainId;
+
+  @override
+  String? get sessionChainId => modal.session?.chainId;
+
+  @override
+  String get sessionTopic => modal.session?.topic ?? '';
+
+  @override
+  Future<void> openModalView() => modal.openModalView();
+
+  @override
+  Future<Object?> request({
+    required String topic,
+    required String chainId,
+    required String method,
+    required List<dynamic> params,
+  }) {
+    return modal.request(
+      topic: topic,
+      chainId: chainId,
+      request: SessionRequestParams(method: method, params: params),
+    );
+  }
+
+  @override
+  Future<void> selectChain(String chainId) async {
+    final namespace = NamespaceUtils.getNamespaceFromChain(chainId);
+    final networkId = ReownAppKitModalNetworks.getIdFromChain(chainId);
+    final networkInfo = ReownAppKitModalNetworks.getNetworkInfo(
+      namespace,
+      networkId,
+    );
+    if (networkInfo != null) {
+      await modal.selectChain(networkInfo, switchChain: true);
+    }
+  }
+}
+
 class ReownService {
-  ReownAppKitModal? _appKitModal;
+  ReownModalAdapter? _modalAdapter;
+  final String? _projectIdOverride;
+
+  ReownService({
+    ReownModalAdapter? modalAdapter,
+    String? projectIdOverride,
+  })  : _modalAdapter = modalAdapter,
+        _projectIdOverride = projectIdOverride;
 
   static const String appScheme = 'locationprotocol';
 
@@ -21,21 +96,22 @@ class ReownService {
     return 'eip155:11155111';
   }
 
-  bool get isAvailable => _projectId.isNotEmpty;
+  bool get isAvailable => _projectId.isNotEmpty || _modalAdapter != null;
 
-  bool get isInitialized => _appKitModal != null;
+  bool get isInitialized => _modalAdapter != null;
 
   String get _projectId {
+    if (_projectIdOverride != null) return _projectIdOverride;
     if (!dotenv.isInitialized) return '';
     return dotenv.env['REOWN_PROJECT_ID'] ?? '';
   }
 
-  ReownAppKitModal? _modalIfReady() {
-    if (!isAvailable || _appKitModal == null) return null;
-    return _appKitModal;
+  ReownModalAdapter? _modalIfReady() {
+    if (!isAvailable || _modalAdapter == null) return null;
+    return _modalAdapter;
   }
 
-  ReownAppKitModal _requireModal() {
+  ReownModalAdapter _requireModal() {
     final modal = _modalIfReady();
     if (modal == null) {
       throw StateError('ReownService unavailable');
@@ -45,7 +121,7 @@ class ReownService {
   
   Future<void> initialize(BuildContext context) async {
     try {
-      if (!isAvailable || _appKitModal != null) return;
+      if (!isAvailable || _modalAdapter != null) return;
       
       final modal = ReownAppKitModal(
         context: context,
@@ -62,7 +138,7 @@ class ReownService {
         ),
       );
       await modal.init();
-      _appKitModal = modal;
+      _modalAdapter = ReownAppKitModalAdapter(modal);
     } catch (e) {
       debugPrint('Reown initialization error: $e');
     }
@@ -82,42 +158,37 @@ class ReownService {
       return null;
     }
 
-    return modal.session?.getAddress('eip155');
+    return modal.address.isEmpty ? null : modal.address;
   }
 
   Future<String> _syncChainForRequest(
-    ReownAppKitModal modal, {
+    ReownModalAdapter modal, {
     String? targetChainId,
   }) async {
-    final desiredChainId = targetChainId ?? modal.selectedChain?.chainId;
+    final desiredChainId = targetChainId ?? modal.selectedChainId;
     if (desiredChainId == null || desiredChainId.isEmpty) {
       return resolveRequestChainId(
-        sessionChainId: modal.session?.chainId,
-        selectedChainId: modal.selectedChain?.chainId,
+        sessionChainId: modal.sessionChainId,
+        selectedChainId: modal.selectedChainId,
       );
     }
 
-    final currentSessionChainId = modal.session?.chainId;
+    final currentSessionChainId = modal.sessionChainId;
     if (currentSessionChainId != null && currentSessionChainId != desiredChainId) {
-      final namespace = NamespaceUtils.getNamespaceFromChain(desiredChainId);
-      final chainId = ReownAppKitModalNetworks.getIdFromChain(desiredChainId);
-      final networkInfo = ReownAppKitModalNetworks.getNetworkInfo(namespace, chainId);
-      if (networkInfo != null) {
-        await modal.selectChain(networkInfo, switchChain: true);
-      }
+      await modal.selectChain(desiredChainId);
     }
 
     return desiredChainId;
   }
 
   String get currentAddress {
-    return _appKitModal?.session?.getAddress('eip155') ?? '';
+    return _modalAdapter?.address ?? '';
   }
 
   String get currentChainId {
     final chainIdStr = resolveRequestChainId(
-      sessionChainId: _appKitModal?.session?.chainId,
-      selectedChainId: _appKitModal?.selectedChain?.chainId,
+      sessionChainId: _modalAdapter?.sessionChainId,
+      selectedChainId: _modalAdapter?.selectedChainId,
     );
     return chainIdStr.split(':').last;
   }
@@ -133,19 +204,17 @@ class ReownService {
       throw StateError('ReownService unavailable');
     }
 
-    final sessionTopic = modal.session?.topic ?? '';
-    final address = modal.session?.getAddress('eip155') ?? '';
+    final sessionTopic = modal.sessionTopic;
+    final address = modal.address;
     
     final response = await modal.request(
       topic: sessionTopic,
       chainId: resolveRequestChainId(
-        sessionChainId: modal.session?.chainId,
-        selectedChainId: modal.selectedChain?.chainId,
+        sessionChainId: modal.sessionChainId,
+        selectedChainId: modal.selectedChainId,
       ),
-      request: SessionRequestParams(
-        method: 'personal_sign',
-        params: [message, address],
-      ),
+      method: 'personal_sign',
+      params: [message, address],
     );
     
     if (response == null) {
@@ -170,8 +239,8 @@ class ReownService {
       throw StateError('ReownService unavailable');
     }
 
-    final sessionTopic = modal.session?.topic ?? '';
-    final address = modal.session?.getAddress('eip155') ?? '';
+    final sessionTopic = modal.sessionTopic;
+    final address = modal.address;
     final chainId = await _syncChainForRequest(
       modal,
       targetChainId: targetChainId,
@@ -180,10 +249,8 @@ class ReownService {
     final response = await modal.request(
       topic: sessionTopic,
       chainId: chainId,
-      request: SessionRequestParams(
-        method: 'eth_signTypedData_v4',
-        params: [address, typedData],
-      ),
+      method: 'eth_signTypedData_v4',
+      params: [address, typedData],
     );
     
     if (response == null) {
@@ -208,7 +275,7 @@ class ReownService {
       throw StateError('ReownService unavailable');
     }
 
-    final sessionTopic = modal.session?.topic ?? '';
+    final sessionTopic = modal.sessionTopic;
     final chainId = await _syncChainForRequest(
       modal,
       targetChainId: targetChainId,
@@ -217,10 +284,8 @@ class ReownService {
     final response = await modal.request(
       topic: sessionTopic,
       chainId: chainId,
-      request: SessionRequestParams(
-        method: 'eth_sendTransaction',
-        params: [txRequest],
-      ),
+      method: 'eth_sendTransaction',
+      params: [txRequest],
     );
     
     if (response == null) {

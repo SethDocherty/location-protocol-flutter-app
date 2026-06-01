@@ -46,15 +46,15 @@ void main() {
       expect(a.uid, isNot(b.uid));
     });
 
-    test('attestation uses version 2 with salt', () async {
+    test('attestation signs with version 2 metadata', () async {
       final signed = await service.signOffchain(
         lat: 0,
         lng: 0,
         memo: 'version test',
       );
 
-      expect(signed.version, 2);
-      expect(signed.salt, isNotEmpty);
+      expect(signed.offchainVersion, 2);
+      expect(signed.saltHex, isNotNull);
     });
 
     test('attestation uses app schema UID', () async {

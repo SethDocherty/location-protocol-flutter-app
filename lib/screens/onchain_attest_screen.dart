@@ -5,16 +5,14 @@ import 'package:provider/provider.dart';
 import '../protocol/attestation_service.dart';
 import '../providers/app_wallet_provider.dart';
 import '../providers/schema_provider.dart';
+import '../utils/schema_field_input_parser.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/network_links.dart';
 
 /// Screen for creating an onchain attestation via the Privy wallet.
 class OnchainAttestScreen extends StatefulWidget {
   final AttestationService service;
-  const OnchainAttestScreen({
-    super.key,
-    required this.service,
-  });
+  const OnchainAttestScreen({super.key, required this.service});
 
   @override
   State<OnchainAttestScreen> createState() => _OnchainAttestScreenState();
@@ -58,20 +56,15 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
     final Map<String, dynamic> data = {};
     for (final field in fields) {
       final val = _controllers[field.name]?.text.trim() ?? '';
-      if (field.type == 'uint256') {
-        data[field.name] = BigInt.tryParse(val) ?? BigInt.zero;
-      } else if (field.type == 'bool') {
-        data[field.name] = val.toLowerCase() == 'true';
-      } else if (field.type.endsWith('[]')) {
-        data[field.name] = val.isEmpty ? <String>[] : val.split(',').map((s) => s.trim()).toList();
-      } else {
-        data[field.name] = val;
-      }
+      data[field.name] = parseSchemaFieldInput(field, val);
     }
     return data;
   }
 
-  Future<void> _submit(SchemaDefinition definition, List<SchemaField> fields) async {
+  Future<void> _submit(
+    SchemaDefinition definition,
+    List<SchemaField> fields,
+  ) async {
     if (!mounted) return;
     setState(() {
       _submitting = true;
@@ -101,9 +94,9 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
 
       // Send via AppWalletProvider
       final hash = await context.read<AppWalletProvider>().sendTransaction(
-            txRequest,
-            context: context,
-          );
+        txRequest,
+        context: context,
+      );
 
       if (hash != null) {
         if (mounted) setState(() => _txHash = hash);
@@ -154,7 +147,10 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
                       labelText: 'Latitude',
                       border: OutlineInputBorder(),
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -165,30 +161,44 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
                       labelText: 'Longitude',
                       border: OutlineInputBorder(),
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            Text('Schema Fields', style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              'Schema Fields',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 12),
-            ...fields.map((f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: TextField(
-                    controller: _controllers[f.name],
-                    decoration: InputDecoration(
-                      labelText: f.name,
-                      helperText: f.type,
-                      border: const OutlineInputBorder(),
-                    ),
+            ...fields.map(
+              (f) => Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: TextField(
+                  controller: _controllers[f.name],
+                  decoration: InputDecoration(
+                    labelText: f.name,
+                    helperText: f.type,
+                    border: const OutlineInputBorder(),
                   ),
-                )),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: _submitting ? null : () => _submit(provider.definition, fields),
+              onPressed: _submitting
+                  ? null
+                  : () => _submit(provider.definition, fields),
               child: _submitting
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Text('Submit Onchain Attestation'),
             ),
             if (_error != null) ...[
@@ -199,7 +209,9 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
                   ),
                 ),
               ),
@@ -227,26 +239,45 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 8),
-            SelectableText('TX Hash: $_txHash', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+            SelectableText(
+              'TX Hash: $_txHash',
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
             if (_uid != null) ...[
               const SizedBox(height: 8),
-              SelectableText('Attestation UID: $_uid', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              SelectableText(
+                'Attestation UID: $_uid',
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              ),
             ] else ...[
               const SizedBox(height: 16),
-              const Row(children: [
-                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                SizedBox(width: 16),
-                Text('Waiting for transaction to be mined...'),
-              ]),
+              const Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 16),
+                  Text('Waiting for transaction to be mined...'),
+                ],
+              ),
             ],
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
               children: [
-                if (NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!) != null)
+                if (NetworkLinks.getExplorerTxUrl(
+                      widget.service.chainId,
+                      _txHash!,
+                    ) !=
+                    null)
                   TextButton.icon(
                     onPressed: () {
-                      final url = NetworkLinks.getExplorerTxUrl(widget.service.chainId, _txHash!);
+                      final url = NetworkLinks.getExplorerTxUrl(
+                        widget.service.chainId,
+                        _txHash!,
+                      );
                       if (url != null) {
                         launchUrl(Uri.parse(url));
                       }
@@ -254,10 +285,18 @@ class _OnchainAttestScreenState extends State<OnchainAttestScreen> {
                     icon: const Icon(Icons.open_in_new),
                     label: const Text('Block Explorer'),
                   ),
-                if (_uid != null && NetworkLinks.getEasScanAttestationUrl(widget.service.chainId, _uid!) != null)
+                if (_uid != null &&
+                    NetworkLinks.getEasScanAttestationUrl(
+                          widget.service.chainId,
+                          _uid!,
+                        ) !=
+                        null)
                   TextButton.icon(
                     onPressed: () {
-                      final url = NetworkLinks.getEasScanAttestationUrl(widget.service.chainId, _uid!);
+                      final url = NetworkLinks.getEasScanAttestationUrl(
+                        widget.service.chainId,
+                        _uid!,
+                      );
                       if (url != null) {
                         launchUrl(Uri.parse(url));
                       }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../protocol/attestation_service.dart';
 import '../providers/schema_provider.dart';
+import '../utils/schema_field_input_parser.dart';
 import '../widgets/attestation_result_card.dart';
 
 /// Screen for signing an offchain location attestation.
@@ -56,21 +57,15 @@ class _SignScreenState extends State<SignScreen> {
     final Map<String, dynamic> data = {};
     for (final field in fields) {
       final val = _controllers[field.name]?.text.trim() ?? '';
-      if (field.type == 'uint256') {
-        data[field.name] = BigInt.tryParse(val) ?? BigInt.zero;
-      } else if (field.type == 'bool') {
-        data[field.name] = val.toLowerCase() == 'true';
-      } else if (field.type.endsWith('[]')) {
-        // Simple comma-separated list support
-        data[field.name] = val.isEmpty ? <String>[] : val.split(',').map((s) => s.trim()).toList();
-      } else {
-        data[field.name] = val;
-      }
+      data[field.name] = parseSchemaFieldInput(field, val);
     }
     return data;
   }
 
-  Future<void> _sign(SchemaDefinition definition, List<SchemaField> fields) async {
+  Future<void> _sign(
+    SchemaDefinition definition,
+    List<SchemaField> fields,
+  ) async {
     setState(() {
       _signing = true;
       _result = null;
@@ -119,7 +114,10 @@ class _SignScreenState extends State<SignScreen> {
                       labelText: 'Latitude',
                       border: OutlineInputBorder(),
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -130,30 +128,44 @@ class _SignScreenState extends State<SignScreen> {
                       labelText: 'Longitude',
                       border: OutlineInputBorder(),
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            Text('Schema Fields', style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              'Schema Fields',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 12),
-            ...fields.map((f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: TextField(
-                    controller: _controllers[f.name],
-                    decoration: InputDecoration(
-                      labelText: f.name,
-                      helperText: f.type,
-                      border: const OutlineInputBorder(),
-                    ),
+            ...fields.map(
+              (f) => Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: TextField(
+                  controller: _controllers[f.name],
+                  decoration: InputDecoration(
+                    labelText: f.name,
+                    helperText: f.type,
+                    border: const OutlineInputBorder(),
                   ),
-                )),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: _signing ? null : () => _sign(provider.definition, fields),
+              onPressed: _signing
+                  ? null
+                  : () => _sign(provider.definition, fields),
               child: _signing
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Text('Sign Attestation'),
             ),
             if (_error != null) ...[
@@ -164,7 +176,9 @@ class _SignScreenState extends State<SignScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
                   ),
                 ),
               ),

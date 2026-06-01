@@ -19,6 +19,7 @@ dependencies:
   location_protocol:
     git:
       url: https://github.com/DecentralizedGeo/location-protocol-dart.git
+      ref: main
   http: ^1.6.0
   reown_appkit: ^1.8.3
   provider: ^6.1.5+1

@@ -14,3 +14,6 @@
 - `LocationProtocolApp` loads `SettingsService` once and passes a shared `RuntimeNetworkConfig` snapshot into `HomeScreen` for chain/RPC context.
 - `AttestationService` read methods now depend only on the explicit HTTP RPC URL and no longer consult wallet RPC capabilities.
 - `AppWalletProvider.sendTransaction()` must receive a `BuildContext` for external wallet submissions; screens that support Reown/external wallets should pass the widget context explicitly.
+- `AttestationService.waitForAttestationUid()` is an app-owned wallet flow helper, not a library client wrapper; it must treat the receipt as canonical, reject reverted statuses, and match the `Attested` event by both topic and EAS contract address before reading the first bytes32 from `log.data`.
+- `ReadOnlyEasRpcAdapter` is the app-owned boundary for signer-free HTTP RPC reads in wallet flows; it mirrors upstream `TransactionReceipt` / `TransactionLog` shapes so future migration to an upstream provider/client path stays narrow.
+- `ReownService` owns Reown-specific wallet transport formatting; `AppWalletProvider` should only derive the CAIP-2 target chain from `txRequest['chainId']` and pass the request through unchanged.

@@ -1,10 +1,9 @@
-import 'dart:convert';
-import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:location_protocol/location_protocol.dart';
 
+import 'read_only_eas_rpc_adapter.dart';
 import 'schema_config.dart';
 
 /// Orchestrates all protocol operations for the app.
@@ -13,13 +12,15 @@ import 'schema_config.dart';
 /// either the static builder pipeline (for wallet-based signers like
 /// [PrivySigner]) or instance methods (for private-key flows).
 class AttestationService {
+  static const int _bytes32HexLength = 66;
+
   final Signer signer;
   final int chainId;
   final String rpcUrl;
-  final http.Client? _httpClient;
   final String _easAddress;
   final OffchainSigner _offchainSigner;
   final bool sponsorGas;
+  final ReadOnlyEasRpcAdapter _readOnlyRpc;
 
   AttestationService({
     required this.signer,
@@ -27,12 +28,17 @@ class AttestationService {
     required this.rpcUrl,
     this.sponsorGas = false,
     http.Client? httpClient,
-  })  : _httpClient = httpClient,
-        _easAddress = ChainConfig.forChainId(chainId)!.eas,
+  })  : _easAddress = ChainConfig.forChainId(chainId)!.eas,
         _offchainSigner = OffchainSigner(
           signer: signer,
           chainId: chainId,
           easContractAddress: ChainConfig.forChainId(chainId)!.eas,
+        ),
+        _readOnlyRpc = ReadOnlyEasRpcAdapter(
+          rpcUrl: rpcUrl,
+          easAddress: ChainConfig.forChainId(chainId)!.eas,
+          schemaRegistryAddress: ChainConfig.forChainId(chainId)!.schemaRegistry,
+          httpClient: httpClient,
         );
 
   /// Signs an offchain location attestation.
@@ -187,37 +193,17 @@ class AttestationService {
 
   /// Fetches the raw timestamp record for a UID.
   Future<String?> getTimestamp(String uid) async {
-    // timestamps(bytes32) selector: 0xb8006d96
-    final callData = '0xb8006d96${uid.replaceFirst('0x', '')}';
-    try {
-      return await _rpcCall('eth_call', [
-        {'to': easAddress, 'data': callData},
-        'latest'
-      ]);
-    } catch (_) {
-      return null;
-    }
+    return _readOnlyRpc.getTimestamp(uid);
   }
 
   /// Fetches a raw schema record from the registry.
   Future<String?> getSchemaRecord(String uid) async {
-    // getSchema(bytes32) selector: 0xa2ea7c6e (official EAS SchemaRegistry)
-    final callData = '0xa2ea7c6e${uid.replaceFirst('0x', '')}';
-
-    final result = await _rpcCall('eth_call', [
-      {'to': schemaRegistryAddress, 'data': callData},
-      'latest'
-    ]);
-    developer.log('AttestationService: getSchemaRecord result: $result');
-    return result;
+    return _readOnlyRpc.getSchemaRecord(uid);
   }
 
   /// Fetches a transaction receipt.
-  Future<Map<String, dynamic>?> getTransactionReceipt(String txHash) async {
-    final result = await _rpcCall('eth_getTransactionReceipt', [txHash]);
-    // JSON-RPC returns null literal for missing receipt.
-    if (result == 'null' || result.isEmpty) return null;
-    return Map<String, dynamic>.from(jsonDecode(result));
+  Future<TransactionReceipt?> getTransactionReceipt(String txHash) {
+    return _readOnlyRpc.getTransactionReceipt(txHash);
   }
 
   /// Polls for a transaction receipt and extracts the EAS Attestation UID.
@@ -226,65 +212,40 @@ class AttestationService {
     int maxRetries = 15,
     Duration pollInterval = const Duration(seconds: 2),
   }) async {
-    for (int i = 0; i < maxRetries; i++) {
-        final receipt = await getTransactionReceipt(txHash);
-        if (receipt != null) {
-            final logs = receipt['logs'] as List<dynamic>?;
-            if (logs != null) {
-              for (final logRaw in logs) {
-                final log = logRaw as Map<String, dynamic>;
-                final address = log['address'] as String?;
-                if (address != null && address.toLowerCase() == _easAddress.toLowerCase()) {
-                  final data = log['data'] as String?;
-                  if (data != null && data.length >= 66) {
-                    return data.substring(0, 66);
-                  }
-                }
-              }
-            }
-            throw Exception('Transaction mined but no Attested event found.');
+    final receipt = await _readOnlyRpc.waitForReceipt(
+      txHash,
+      maxRetries: maxRetries,
+      pollInterval: pollInterval,
+    );
+    return _extractAttestedUid(receipt);
+  }
+
+  String _extractAttestedUid(TransactionReceipt receipt) {
+    if (receipt.logs.isEmpty) {
+      throw StateError(
+        'No Attested event found in receipt logs from $_easAddress',
+      );
+    }
+
+    final lowerAddress = _easAddress.toLowerCase();
+    for (final log in receipt.logs) {
+      if (log.address.toLowerCase() == lowerAddress &&
+          log.topics.isNotEmpty &&
+          log.topics.first == EASConstants.attestedEventTopic) {
+        final data = log.data;
+        if (data.startsWith('0x') && data.length >= _bytes32HexLength) {
+          return data.substring(0, _bytes32HexLength);
         }
-        await Future.delayed(pollInterval);
+
+        throw StateError(
+          'Attested event data does not contain a bytes32 UID: $data',
+        );
+      }
     }
-    throw Exception('Timeout waiting for transaction receipt.');
+
+    throw StateError(
+      'No Attested event found in receipt logs from $_easAddress',
+    );
   }
 
-  /// Performs an RPC call, falling back to HTTP if the signer's provider fails.
-  Future<String> _rpcCall(String method, List<dynamic> params) async {
-    if (rpcUrl.isEmpty) {
-      throw UnsupportedError(
-        'Read-only checks require an RPC URL in Settings.',
-      );
-    }
-
-    final client = _httpClient ?? http.Client();
-    try {
-      final response = await client.post(
-        Uri.parse(rpcUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'jsonrpc': '2.0',
-          'id': DateTime.now().millisecondsSinceEpoch,
-          'method': method,
-          'params': params,
-        }),
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception('RPC failed: ${response.statusCode}');
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      if (data.containsKey('error')) {
-        throw Exception('RPC Error: ${data['error']['message']}');
-      }
-
-      final result = data['result'];
-      if (result == null) return 'null';
-      if (result is String) return result;
-      return jsonEncode(result);
-    } finally {
-      if (_httpClient == null) client.close();
-    }
-  }
 }

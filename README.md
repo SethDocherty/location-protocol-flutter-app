@@ -1,10 +1,14 @@
 # Location Protocol Signature Service
 
-Location Protocol Signature Service demo app — implements EIP-712 signing of location attestations using the Ethereum Attestation Service (EAS) schema.
+A Flutter application for creating and verifying location attestations using the Ethereum Attestation Service (EAS). Supports onchain and offchain EIP-712 signing via Privy embedded wallets, Reown/WalletConnect (MetaMask, etc.), and imported private keys. Includes schema management with UID generation and onchain registration across 19+ EVM networks.
 
 ## Documentation
 
-For a detailed overview of the protocol architecture implementation in flutter, signing process, and our implementation assumptions, see the [Location Protocol Architecture](docs/location_protocol_architecture.md).
+- **[Location Protocol Architecture](docs/location_protocol_architecture.md)** — Overview of the app's capabilities, signing methods (Privy, Reown, imported keys), provider architecture, schema management, and multi-chain support.
+
+- **[Custom Wallet Signers](docs/custom-wallet-signers.md)** — Deep dive into the design and implementation of `PrivySigner` and `ExternalWalletSigner` classes that bridge Privy and Reown to the `location_protocol` library's `Signer` interface.
+
+- **[Walkthrough](walkthrough.md)** — Module-by-module breakdown of the app structure, key flows for signing and verification, schema management, and test coverage.
 
 ## Prerequisites
 
@@ -15,12 +19,14 @@ To build and run this application, you must have Flutter installed on your machi
 ## Getting Started
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/SethDocherty/location-protocol-flutter-app.git
    cd location-protocol-flutter-app
    ```
 
 2. **Install dependencies**:
+
    ```bash
    flutter pub get
    ```
@@ -28,6 +34,7 @@ To build and run this application, you must have Flutter installed on your machi
 ## Running the App
 
 To run the application in development mode:
+
 ```bash
 flutter run
 ```
@@ -35,6 +42,7 @@ flutter run
 ## Testing
 
 To execute the unit and widget tests:
+
 ```bash
 flutter test
 ```

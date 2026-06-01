@@ -16,7 +16,7 @@ const _testPrivateKey =
 
 class TestAppWalletProvider extends AppWalletProvider {
   TestAppWalletProvider(SettingsService settingsService)
-      : super(settingsService: settingsService);
+    : super(settingsService: settingsService);
 
   BuildContext? lastContext;
   Map<String, dynamic>? lastTxRequest;
@@ -35,12 +35,14 @@ class TestAppWalletProvider extends AppWalletProvider {
 }
 
 class FakeOnchainAttestationService extends AttestationService {
+  Map<String, dynamic>? lastUserData;
+
   FakeOnchainAttestationService()
-      : super(
-          signer: LocalKeySigner(privateKeyHex: _testPrivateKey),
-          chainId: 11155111,
-          rpcUrl: 'https://unused.rpc',
-        );
+    : super(
+        signer: LocalKeySigner(privateKeyHex: _testPrivateKey),
+        chainId: 11155111,
+        rpcUrl: 'https://unused.rpc',
+      );
 
   @override
   Uint8List buildAttestCallDataWithUserData({
@@ -50,6 +52,7 @@ class FakeOnchainAttestationService extends AttestationService {
     required Map<String, dynamic> userData,
     BigInt? eventTimestamp,
   }) {
+    lastUserData = userData;
     return Uint8List.fromList([1, 2, 3]);
   }
 
@@ -93,12 +96,14 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<AppWalletProvider>.value(value: walletProvider),
-          ChangeNotifierProvider<SchemaProvider>(create: (_) => SchemaProvider()),
+          ChangeNotifierProvider<AppWalletProvider>.value(
+            value: walletProvider,
+          ),
+          ChangeNotifierProvider<SchemaProvider>(
+            create: (_) => SchemaProvider(),
+          ),
         ],
-        child: MaterialApp(
-          home: OnchainAttestScreen(service: service),
-        ),
+        child: MaterialApp(home: OnchainAttestScreen(service: service)),
       ),
     );
 
@@ -110,5 +115,40 @@ void main() {
     expect(walletProvider.lastContext, isNotNull);
     expect(find.text('TX Hash: 0xtx-hash'), findsOneWidget);
     expect(find.text('Attestation UID: 0xattestation-uid'), findsOneWidget);
+  });
+
+  testWidgets('parses bytes[] fields into byte arrays before submission', (
+    tester,
+  ) async {
+    final settingsService = await SettingsService.create();
+    final walletProvider = TestAppWalletProvider(settingsService);
+    await walletProvider.ready;
+
+    final service = FakeOnchainAttestationService();
+    final schemaProvider = SchemaProvider(
+      initialFields: [SchemaField(type: 'bytes[]', name: 'payload')],
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AppWalletProvider>.value(
+            value: walletProvider,
+          ),
+          ChangeNotifierProvider<SchemaProvider>.value(value: schemaProvider),
+        ],
+        child: MaterialApp(home: OnchainAttestScreen(service: service)),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).at(2), '0x1234, 0xabcd');
+    await tester.ensureVisible(find.text('Submit Onchain Attestation'));
+    await tester.tap(find.text('Submit Onchain Attestation'));
+    await tester.pumpAndSettle();
+
+    final payload = service.lastUserData?['payload'];
+    expect(payload, isA<List<Uint8List>>());
+    expect((payload as List<Uint8List>)[0], orderedEquals([0x12, 0x34]));
+    expect(payload[1], orderedEquals([0xab, 0xcd]));
   });
 }
